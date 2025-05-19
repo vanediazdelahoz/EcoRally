@@ -15,7 +15,7 @@ class SplashScreen(State):
         self.instruction_font = load_font("assets/fonts/mc-ten-lowercase-alt.ttf", 30)
 
         # Fondo del cielo
-        self.bg_base = pygame.image.load("assets/images/Sky_sky2.png").convert()
+        self.bg_base = pygame.image.load("assets/images/Sky_sky3.png").convert()
         self.sky_height = self.bg_base.get_height()
 
         # Capa de árboles con transparencia y escalado proporcional
@@ -50,14 +50,14 @@ class SplashScreen(State):
         self.subtitle_rect = self.subtitle.get_rect(center=(SCREEN_WIDTH // 2, (SCREEN_HEIGHT // 5) + 50))
 
         # Barra verde de instrucción (encima del rectángulo negro)
-        self.bar_height = 40
-        self.bar_rect = pygame.Rect(0, SCREEN_HEIGHT - 50 - self.bar_height, SCREEN_WIDTH, self.bar_height)
+        self.bar_height = 50
+        self.bar_rect = pygame.Rect(0, SCREEN_HEIGHT - 60 - self.bar_height, SCREEN_WIDTH, self.bar_height)
         self.bar_color = GREEN
 
         # Texto de instrucción dentro de la barra verde
         self.press_enter = self.instruction_font.render("Presiona ENTER para continuar", True, WHITE)
         self.press_enter_rect = self.press_enter.get_rect(
-            midleft=(20, SCREEN_HEIGHT - 55 - (self.bar_height // 2))
+            midleft=(20, SCREEN_HEIGHT - 65 - (self.bar_height // 2))
         )
 
     def handle_event(self, event):

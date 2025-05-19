@@ -1,8 +1,8 @@
 # Configuración fija (pantalla, FPS, colores, etc.)
 
 # Screen
-SCREEN_WIDTH = 1100
-SCREEN_HEIGHT = 500
+SCREEN_WIDTH = 1000
+SCREEN_HEIGHT = 600
 FPS = 60
 
 # Colors
