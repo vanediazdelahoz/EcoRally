@@ -30,8 +30,9 @@ class SplashScreen(State):
         self.bg_trees = pygame.transform.smoothscale(self.bg_trees_original, (desired_width, desired_height))
         self.trees_height = desired_height
         self.bg_trees_y = self.sky_height - self.trees_height
+
         self.bg_scroll_x = 0
-        self.bg_scroll_speed = 1  # Velocidad de desplazamiento
+        self.bg_scroll_speed = 0.5  # Velocidad de desplazamiento
 
         # Rectángulo negro debajo de los árboles
         self.black_rect = pygame.Rect(
@@ -67,25 +68,24 @@ class SplashScreen(State):
 
     def update(self):
         self.bg_scroll_x -= self.bg_scroll_speed
-        if self.bg_scroll_x <= -self.bg_trees.get_width():
-            self.bg_scroll_x = 0
+        width = self.bg_trees.get_width()
+        # Usar módulo para mantener el scroll_x siempre entre -width y 0
+        if self.bg_scroll_x <= -width:
+            self.bg_scroll_x += width
 
     def render(self, screen):
-        # Fondo del cielo
         screen.blit(self.bg_base, (0, 0))
+        width = self.bg_trees.get_width()
 
-        # Árboles en scroll horizontal
-        screen.blit(self.bg_trees, (self.bg_scroll_x, self.bg_trees_y))
-        screen.blit(self.bg_trees, (self.bg_scroll_x + self.bg_trees.get_width(), self.bg_trees_y))
+        # Dibujar tantas veces como sea necesario para cubrir toda la pantalla
+        x = self.bg_scroll_x
+        while x < SCREEN_WIDTH:
+            screen.blit(self.bg_trees, (x, self.bg_trees_y))
+            x += width
 
-        # Rectángulo negro debajo de los árboles
         pygame.draw.rect(screen, BLACK, self.black_rect)
-
-        # Título y subtítulo encima del fondo
         screen.blit(self.title, self.title_rect)
         screen.blit(self.subtitle, self.subtitle_rect)
-
-        # Barra verde con instrucción
         pygame.draw.rect(screen, self.bar_color, self.bar_rect)
         screen.blit(self.press_enter, self.press_enter_rect)
 
