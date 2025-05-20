@@ -42,7 +42,8 @@ class Game:
             self.state_stack[-1].handle_event(event)
 
     def update(self):
-        self.state_stack[-1].update()
+        dt = self.clock.get_time() / 1000  # convertir a segundos
+        self.state_stack[-1].update(dt)
 
     def render(self):
         # 1. Renderizar todo en la superficie lógica

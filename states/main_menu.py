@@ -38,7 +38,7 @@ class MainMenu(State):
         elif self.selected == 3:  # Salir
             self.game.running = False
 
-    def update(self):
+    def update(self, dt):
         pass
 
     def render(self, screen):
