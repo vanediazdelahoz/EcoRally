@@ -23,6 +23,10 @@ class Game:
         self.state_stack = []
         self.load_states()
 
+    def quit(self):
+        pygame.quit()
+        exit()
+
     def load_states(self):
         splash_screen = SplashScreen(self)
         self.state_stack.append(splash_screen)
