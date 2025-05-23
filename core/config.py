@@ -6,3 +6,6 @@ class Config:
         self.sound_effects = True
         self.difficulty = "medium"  # easy, medium, hard
         self.characters = []  # Personajes seleccionados
+        self.machine_mode = False  
+        
+config = Config()
