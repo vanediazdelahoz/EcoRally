@@ -6,6 +6,8 @@ import random
 
 
 def main():
+    rounds = 5
+
     # Crear casillas
     start = Square(0, "blue")
     green1 = Square(1, "green")
@@ -21,11 +23,26 @@ def main():
     recycle.add_next_square(start)
 
     # Crear jugador
-    player = Player("EcoHéroe")
+    player1 = Player("Lulo")
+    player2 = Player("Venado")
+    while True:
+        dice1 = random.randint(0, 5)
+        dice2 = random.randint(0, 5)
+        print(f"dado de {player1.character}: {dice1}")
+        print(f"dado de {player2.character}: {dice2}")
+        if dice1 > dice2:
+            print(f"{player1.character} comienza")
+            break
+        elif dice2 > dice1:
+            print(f"{player2.character} comienza.")
+            player1, player2 = player2, player1
+            break
+        else:
+            print("Empate. Se lanzan los dados de nuevo")
 
     # Iniciar en start
-    player.move_to(start)
-    print(f"{player.character} comienza en la casilla {player.position.id}")
+    player1.move_to(start)
+    player2.move_to(start)
 
     def move_player(player):
         if player.position.next_squares:
@@ -41,14 +58,29 @@ def main():
                 player.try_recycle()
 
     # Moverse y recolectar basura
-    while True:
+    def round(r, player1, player2):
+        print(f"Ronda {r}")
+
+        print(f"Turno de {player1.character}")
         dice = random.randint(0, 5)
         print(f"dado {dice}")
         for _ in range(dice + 1):
-            move_player(player)
-        print(f"{player.character} se movió a la casilla {player.position.id}")
-        player.position.effect(player)
-        print(f"Basura: {player.trash}, Insignias: {player.badges}")
+            move_player(player1)
+        print(f"{player1.character} se movió a la casilla {player1.position.id}")
+        player1.position.effect(player1)
+        print(f"Basura: {player1.trash}, Insignias: {player1.badges}")
+
+        print(f"Turno de {player2.character}")
+        dice = random.randint(0, 5)
+        print(f"dado {dice}")
+        for _ in range(dice + 1):
+            move_player(player2)
+        print(f"{player2.character} se movió a la casilla {player2.position.id}")
+        player2.position.effect(player2)
+        print(f"Basura: {player2.trash}, Insignias: {player2.badges}")
+
+    for r in range(rounds):
+        round(r + 1, player1, player2)
 
 
 if __name__ == "__main__":
