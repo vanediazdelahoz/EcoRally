@@ -1,3 +1,6 @@
+import random
+
+
 class Square:
     def __init__(self, id, type):
         self.id = id
@@ -22,3 +25,10 @@ class Square:
         elif self.type == "green":
             print(f"+3 de basura con id {self.id}")
             player.collect_trash(3)
+        elif self.type == "red":
+            print(f"-3 de basura con id {self.id}")
+            player.collect_trash(-3)
+        elif self.type == "purple":
+            dice = random.randint(1, 6) * 2
+            print(f"+{dice} de basura con id {self.id}")
+            player.collect_trash(dice)
