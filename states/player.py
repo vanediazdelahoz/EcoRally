@@ -12,12 +12,19 @@ class Player:
         square.add_player(self)
 
     def collect_trash(self, amount):
-        self.trash += amount
-
-    def try_recycle(self):
-        if self.trash >= 20:
-            self.trash = self.trash - 20
-            self.badges += 1
-            print("Insignia obtenida")
+        if (self.trash + amount) < 0:
+            self.trash = 0
         else:
-            print("No hay suficiente basura")
+            self.trash += amount
+
+    def try_recycle(self, timeout):
+        if self.position.timeout == 0:
+            if self.trash >= 20:
+                self.trash = self.trash - 20
+                self.badges += 1
+                self.position.timeout = timeout
+                print("Insignia obtenida")
+            else:
+                print("No hay suficiente basura")
+        else:
+            print("Punto de reciclaje ocupado")

@@ -6,8 +6,10 @@ import random
 
 
 def main():
-    rounds = 5
+    rounds = 10
     total_recylcing_points = 3
+    recycle_timeout = 2
+    initial_trash = 10
 
     # Crear casillas
     s0 = Square(0, "blue")
@@ -124,7 +126,6 @@ def main():
     s66.add_next_square(s67)
     s67.add_next_square(s68)
     s68.add_next_square(s69)
-    s68.add_next_square(s69)
     s69.add_next_square(s0)
     s32.add_next_square(s33)  # 33 empieza bifurcación derecha de 32
     s32.add_next_square(s33)
@@ -169,23 +170,31 @@ def main():
 
     # Definir puntos de reciclaje posibles
     def choose_recycle_points(pos_rec, total_rpoints):
+        rpoints = []
         for _ in range(total_rpoints):
             x = random.randint(0, len(pos_rec) - 1)
             if len(pos_rec[x]) > 1:
                 y = random.randint(0, len(pos_rec[x]) - 1)
+                rpoints.append(pos_rec[x][y])
                 pos_rec[x][y].set_recycling_point()
                 print(f"Punto de reciclaje en {pos_rec[x][y].id}")
                 del pos_rec[x]
             else:
+                rpoints.append(pos_rec[x][0])
                 pos_rec[x][0].set_recycling_point()
                 print(f"Punto de reciclaje en {pos_rec[x][0].id}")
                 del pos_rec[x]
+        return rpoints
 
-    choose_recycle_points(possible_recycling_points, total_recylcing_points)
+    recycling_points = choose_recycle_points(
+        possible_recycling_points, total_recylcing_points
+    )
 
     # Crear jugador
     player1 = Player("Lulo")
     player2 = Player("Venado")
+    player1.trash = initial_trash
+    player2.trash = initial_trash
     while True:
         dice1 = random.randint(0, 5)
         dice2 = random.randint(0, 5)
@@ -205,7 +214,7 @@ def main():
     player1.move_to(s0)
     player2.move_to(s0)
 
-    def move_player(player):
+    def move_player(player, timeout):
         if player.position.next_squares:
             if len(player.position.next_squares) > 1:
                 print("Selecciona el camino:")
@@ -216,32 +225,41 @@ def main():
             else:
                 player.move_to(player.position.next_squares[0])
             if player.position.recycle:
-                player.try_recycle()
+                player.try_recycle(timeout)
 
     # Moverse y recolectar basura
-    def round(r, player1, player2):
+    def round(r, player1, player2, timeout, rpoints):
         print(f"Ronda {r}")
 
         print(f"Turno de {player1.character}")
-        dice = random.randint(0, 5)
-        print(f"dado {dice}")
-        for _ in range(dice + 1):
-            move_player(player1)
+        dice1 = random.randint(1, 6)
+        print(f"dado1 {dice1}")
+        dice2 = random.randint(1, 6)
+        print(f"dado2 {dice2}")
+        dice = dice1 + dice2
+        for _ in range(dice):
+            move_player(player1, timeout)
         print(f"{player1.character} se movió a la casilla {player1.position.id}")
         player1.position.effect(player1)
         print(f"Basura: {player1.trash}, Insignias: {player1.badges}")
 
         print(f"Turno de {player2.character}")
-        dice = random.randint(0, 5)
-        print(f"dado {dice}")
-        for _ in range(dice + 1):
-            move_player(player2)
+        dice1 = random.randint(1, 6)
+        print(f"dado1 {dice1}")
+        dice2 = random.randint(1, 6)
+        print(f"dado2 {dice2}")
+        dice = dice1 + dice2
+        for _ in range(dice):
+            move_player(player2, timeout)
         print(f"{player2.character} se movió a la casilla {player2.position.id}")
         player2.position.effect(player2)
         print(f"Basura: {player2.trash}, Insignias: {player2.badges}")
+        for i in rpoints:
+            if i.timeout > 0:
+                i.timeout += -1
 
     for r in range(rounds):
-        round(r + 1, player1, player2)
+        round(r + 1, player1, player2, recycle_timeout, recycling_points)
 
 
 if __name__ == "__main__":

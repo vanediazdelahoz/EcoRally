@@ -8,6 +8,7 @@ class Square:
         self.players = []
         self.next_squares = []
         self.recycle = False
+        self.timeout = 0
 
     def add_player(self, player):
         self.players.append(player)
