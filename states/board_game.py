@@ -7,6 +7,7 @@ import random
 
 def main():
     rounds = 5
+    total_recylcing_points = 3
 
     # Crear casillas
     s0 = Square(0, "blue")
@@ -163,6 +164,24 @@ def main():
     s56.add_next_square(s57)
     s57.add_next_square(s58)
     s58.add_next_square(s59)
+
+    possible_recycling_points = [[s2, s4], [s13, s17], [s44], [s56]]
+
+    # Definir puntos de reciclaje posibles
+    def choose_recycle_points(pos_rec, total_rpoints):
+        for _ in range(total_rpoints):
+            x = random.randint(0, len(pos_rec) - 1)
+            if len(pos_rec[x]) > 1:
+                y = random.randint(0, len(pos_rec[x]) - 1)
+                pos_rec[x][y].set_recycling_point()
+                print(f"Punto de reciclaje en {pos_rec[x][y].id}")
+                del pos_rec[x]
+            else:
+                pos_rec[x][0].set_recycling_point()
+                print(f"Punto de reciclaje en {pos_rec[x][0].id}")
+                del pos_rec[x]
+
+    choose_recycle_points(possible_recycling_points, total_recylcing_points)
 
     # Crear jugador
     player1 = Player("Lulo")
