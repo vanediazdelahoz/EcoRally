@@ -9,12 +9,18 @@ from core.utils import load_font
 class CharacterSelection(State):
     def __init__(self, game):
         super().__init__(game)
+        pygame.mouse.set_visible(False)
 
         self.font_title = load_font("assets/fonts/PublicPixel.ttf", 28)
         self.font_button = load_font("assets/fonts/mc-ten-lowercase-alt.ttf", 14)
 
+        # Texto y sombra
         self.title_text = self.font_title.render("SELECCIONA TU PERSONAJE", True, (255, 255, 255))
+        self.title_shadow = self.font_title.render("SELECCIONA TU PERSONAJE", True, (0, 0, 0))  # sombra negra
+
+        # Posición del texto
         self.title_rect = self.title_text.get_rect(center=(SCREEN_WIDTH // 2, 130))
+        self.shadow_rect = self.title_shadow.get_rect(center=(SCREEN_WIDTH // 2 + 2, 132))  # sombra ligeramente desplazada
 
         try:
             self.bg_imagec = pygame.image.load("assets/images/clouds_twilight.png").convert_alpha()
@@ -53,6 +59,7 @@ class CharacterSelection(State):
             "assets/personajes/Luis/Luis1.png"
         ]
 
+        self.character_names = ["Rosalba", "Icm", "Sofia", "Luis"]
         self.characters = []
         i = 0
         for path in character_paths:
@@ -72,6 +79,10 @@ class CharacterSelection(State):
 
         self.selected_j1 = 0
         self.selected_j2 = 1
+        self.final_j1 = None
+        self.final_j2 = None
+        config.characters.append(self.final_j1)
+        config.characters.append(self.final_j2)
 
         vertical_offset = 40
 
@@ -103,26 +114,24 @@ class CharacterSelection(State):
                 self.selected_j2 = (self.selected_j2 + 1) % len(self.characters)
 
             elif event.key == pygame.K_f:
-                if self.selected_j1 != self.selected_j2:  # Opcional: evitar que seleccionen el mismo
-                    config.characters = [self.selected_j1, None]
-                    print(f"Jugador 1 seleccionó personaje {self.selected_j1} con F")
+                if self.final_j2 is None or self.selected_j1 != self.final_j2:
+                    self.final_j1 = self.selected_j1
+                    config.characters[0] = self.final_j1
+                    print(f"Jugador 1 seleccionó personaje {self.final_j1} con F")
+                else:
+                    print("Ese personaje ya fue seleccionado por Jugador 2.")
 
             elif event.key == pygame.K_RETURN:
-                if self.selected_j1 != self.selected_j2:  # Opcional
-                    if config.characters == [] or config.characters[0] is not None:
-                        config.characters = [config.characters[0], self.selected_j2]
-                    else:
-                        config.characters = [None, self.selected_j2]
-                    print(f"Jugador 2 seleccionó personaje {self.selected_j2} con Enter")
+                if self.final_j1 is None or self.final_j1 != self.selected_j2:
+                    self.final_j2 = self.selected_j2
+                    config.characters[1] = self.final_j2
+                    print(f"Jugador 2 seleccionó personaje {self.final_j2} con Enter")
+                else:
+                    print("Ese personaje ya fue seleccionado por Jugador 1.")
 
-                if None not in config.characters:
+            if None not in config.characters:
                     print("Ambos jugadores seleccionaron. Continuar...")
 
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.button_j1.collidepoint(event.pos):
-                print(f"Jugador 1 seleccionó personaje {self.selected_j1} con click")
-            elif self.button_j2.collidepoint(event.pos):
-                print(f"Jugador 2 seleccionó personaje {self.selected_j2} con click")
 
     def update(self, dt):
         if self.bg_image:
@@ -142,6 +151,7 @@ class CharacterSelection(State):
         else:
             points = [(x, y), (x - size, y - size), (x - size, y + size)]
         pygame.draw.polygon(surface, color, points)
+        pygame.draw.polygon(surface, (255, 255, 255), points, 2)  # borde blanco
 
     def render(self, screen):
         if self.bg_imagec:
@@ -161,10 +171,16 @@ class CharacterSelection(State):
             screen.blit(self.overlay_image, (0, 0))
 
 
+        screen.blit(self.title_shadow, self.shadow_rect)
         screen.blit(self.title_text, self.title_rect)
 
-        pygame.draw.rect(screen, (50, 50, 50), self.j1_rect, border_radius=10)
+        # Paneles con fondo + borde
+        pygame.draw.rect(screen, (50, 50, 50), self.j1_rect, border_radius=10)  # fondo
+        pygame.draw.rect(screen, (255, 255, 255), self.j1_rect, 2, border_radius=10)  # borde
+
         pygame.draw.rect(screen, (50, 50, 50), self.j2_rect, border_radius=10)
+        pygame.draw.rect(screen, (255, 255, 255), self.j2_rect, 2, border_radius=10)
+
 
         char_j1 = self.characters[self.selected_j1]
         char_rect_j1 = char_j1.get_rect(center=self.j1_rect.center)
@@ -182,15 +198,28 @@ class CharacterSelection(State):
         self._draw_arrow(screen, self.j2_rect.left - 35, self.j2_rect.centery, "left")
         self._draw_arrow(screen, self.j2_rect.right + 35, self.j2_rect.centery, "right")
 
+        # Botón jugador 1 con borde
         pygame.draw.rect(screen, (50, 50, 50), self.button_j1, border_radius=6)
-        btn_text_j1 = self.font_button.render("SELECCIONAR", True, (255, 255, 255))
+        border_color_j1 = (0, 255, 0) if self.final_j1 is not None else (255, 255, 255)
+        pygame.draw.rect(screen, border_color_j1, self.button_j1, 2, border_radius=6)
+
+        nombre_j1 = self.character_names[self.final_j1] if self.final_j1 is not None else self.character_names[self.selected_j1]
+        btn_text_j1 = self.font_button.render(nombre_j1, True, border_color_j1)
         btn_rect_j1 = btn_text_j1.get_rect(center=self.button_j1.center)
         screen.blit(btn_text_j1, btn_rect_j1)
 
+
+        # Botón jugador 2 con borde
         pygame.draw.rect(screen, (50, 50, 50), self.button_j2, border_radius=6)
-        btn_text_j2 = self.font_button.render("SELECCIONAR", True, (255, 255, 255))
+        border_color_j2 = (0, 255, 0) if self.final_j2 is not None else (255, 255, 255)
+        pygame.draw.rect(screen, border_color_j2, self.button_j2, 2, border_radius=6)
+
+        nombre_j2 = self.character_names[self.final_j2] if self.final_j2 is not None else self.character_names[self.selected_j2]
+        btn_text_j2 = self.font_button.render(nombre_j2, True, border_color_j2)
         btn_rect_j2 = btn_text_j2.get_rect(center=self.button_j2.center)
         screen.blit(btn_text_j2, btn_rect_j2)
+
+        
 
 
 
