@@ -128,7 +128,6 @@ def main():
     s68.add_next_square(s69)
     s69.add_next_square(s0)
     s32.add_next_square(s33)  # 33 empieza bifurcación derecha de 32
-    s32.add_next_square(s33)
     s33.add_next_square(s60)
     s60.add_next_square(s64)
     s32.add_next_square(s34)  # 34 empieza bifurcación izquierda de 32
@@ -151,16 +150,10 @@ def main():
     s50.add_next_square(s51)
     s51.add_next_square(s52)
     s52.add_next_square(s53)
-    s53.add_next_square(s54)
     s54.add_next_square(s55)
-    s55.add_next_square(s56)
-    s56.add_next_square(s57)
-    s57.add_next_square(s58)
-    s58.add_next_square(s59)
     s59.add_next_square(s67)
     s48.add_next_square(s53)  # 53 empieza bifurcación izquierda de 48
     s53.add_next_square(s54)
-    s54.add_next_square(s55)
     s55.add_next_square(s56)
     s56.add_next_square(s57)
     s57.add_next_square(s58)
@@ -177,12 +170,12 @@ def main():
                 y = random.randint(0, len(pos_rec[x]) - 1)
                 rpoints.append(pos_rec[x][y])
                 pos_rec[x][y].set_recycling_point()
-                print(f"Punto de reciclaje en {pos_rec[x][y].id}")
+                print(f"Punto de Reciclaje en la casilla {pos_rec[x][y].id}")
                 del pos_rec[x]
             else:
                 rpoints.append(pos_rec[x][0])
                 pos_rec[x][0].set_recycling_point()
-                print(f"Punto de reciclaje en {pos_rec[x][0].id}")
+                print(f"Punto de Reciclaje en la casilla {pos_rec[x][0].id}")
                 del pos_rec[x]
         return rpoints
 
@@ -196,10 +189,9 @@ def main():
     player1.trash = initial_trash
     player2.trash = initial_trash
     while True:
-        dice1 = random.randint(0, 5)
-        dice2 = random.randint(0, 5)
-        print(f"dado de {player1.character}: {dice1}")
-        print(f"dado de {player2.character}: {dice2}")
+        dice1 = random.randint(1, 6)
+        dice2 = random.randint(1, 6)
+        print(f"\nTiro inicial — {player1.character}: {dice1} | {player2.character}: {dice2}")
         if dice1 > dice2:
             print(f"{player1.character} comienza")
             break
@@ -210,6 +202,9 @@ def main():
         else:
             print("Empate. Se lanzan los dados de nuevo")
 
+    print(f"{player1.character}: Basura: {player1.trash}, Insignias: {player1.badges}")
+    print(f"{player2.character}: Basura: {player2.trash}, Insignias: {player2.badges}")
+
     # Iniciar en start
     player1.move_to(s0)
     player2.move_to(s0)
@@ -219,7 +214,7 @@ def main():
             if len(player.position.next_squares) > 1:
                 print("Selecciona el camino:")
                 for i in range(len(player.position.next_squares)):
-                    print(f"{i} para id = {player.position.next_squares[i].id}")
+                    print(f"{i} → Casilla {player.position.next_squares[i].id}")
                 camino = int(input())
                 player.move_to(player.position.next_squares[camino])
             else:
@@ -229,38 +224,59 @@ def main():
 
     # Moverse y recolectar basura
     def round(r, player1, player2, timeout, rpoints):
-        print(f"Ronda {r}")
+        print(f"\n━━━ RONDA {r}/{rounds} ━━━")
 
-        print(f"Turno de {player1.character}")
+        print(f"\nTurno de {player1.character}")
         dice1 = random.randint(1, 6)
-        print(f"dado1 {dice1}")
         dice2 = random.randint(1, 6)
-        print(f"dado2 {dice2}")
         dice = dice1 + dice2
+        print(f"Dados: {dice1} y {dice2}  →  Total {dice}")
         for _ in range(dice):
             move_player(player1, timeout)
-        print(f"{player1.character} se movió a la casilla {player1.position.id}")
+        print(f"{player1.character} avanza hasta la casilla {player1.position.id}")
         player1.position.effect(player1)
-        print(f"Basura: {player1.trash}, Insignias: {player1.badges}")
+        print(f"Inventario — Insignias: {player1.badges} | Basura: {player1.trash}")
 
-        print(f"Turno de {player2.character}")
+        print(f"\nTurno de {player2.character}")
         dice1 = random.randint(1, 6)
-        print(f"dado1 {dice1}")
         dice2 = random.randint(1, 6)
-        print(f"dado2 {dice2}")
         dice = dice1 + dice2
+        print(f"Dados: {dice1} y {dice2}  →  Total {dice}")
         for _ in range(dice):
             move_player(player2, timeout)
-        print(f"{player2.character} se movió a la casilla {player2.position.id}")
+        print(f"{player2.character} avanza hasta la casilla {player2.position.id}")
         player2.position.effect(player2)
-        print(f"Basura: {player2.trash}, Insignias: {player2.badges}")
+        print(f"Inventario — Insignias: {player2.badges} | Basura: {player2.trash}")
+        
         for i in rpoints:
             if i.timeout > 0:
                 i.timeout += -1
 
     for r in range(rounds):
         round(r + 1, player1, player2, recycle_timeout, recycling_points)
+    
+    print("\n¡Fin del juego!")
+    print("Resultados finales:")
+    print(f'{player1.character} — Insignias: {player1.badges} | Basura restante: {player1.trash}')
+    print(f'{player2.character} — Insignias: {player2.badges} | Basura restante: {player2.trash}')
+    
+    print("")
 
+    if (player1.badges > player2.badges):
+        print(f'{player1.character} gana la partida con más insignias que su oponente.')
+        print(f'¡Felicidades, {player1.character}! ¡Has ganado!')
+    elif (player2.badges < player1.badges):
+        print(f'{player2.character} gana la partida con más insignias que su oponente.')
+        print(f'¡Felicidades, {player2.character}! ¡Has ganado!')
+    else:
+        if (player1.trash > player2.trash):
+            print(f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {player1.character} gana la partida gracias a su mayor esfuerzo recolectando basura.') 
+            print(f'¡Felicidades, {player1.character}! ¡Has ganado!')
+        elif (player2.trash > player1.trash):
+            print(f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {player2.character} gana la partida gracias a su mayor esfuerzo recolectando basura.') 
+            print(f'¡Felicidades, {player2.character}! ¡Has ganado!')
+        else:
+            print("¡Es un empate total! Ambos jugadores tienen las mismas insignias y basura.")
 
 if __name__ == "__main__":
     main()

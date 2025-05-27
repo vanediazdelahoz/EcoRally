@@ -24,12 +24,14 @@ class Square:
         if self.type == "blue":
             print("Casilla azul")
         elif self.type == "green":
-            print(f"+3 de basura con id {self.id}")
+            print(f"Casilla verde: Ganas 3 de basura")
             player.collect_trash(3)
         elif self.type == "red":
-            print(f"-3 de basura con id {self.id}")
+            print(f"Oh no… ¡Casilla roja! Has perdido 3 de basura.")
             player.collect_trash(-3)
         elif self.type == "purple":
-            dice = random.randint(1, 6) * 2
-            print(f"+{dice} de basura con id {self.id}")
-            player.collect_trash(dice)
+            print("¡Casilla morada! Lanza el dado bonus:")
+            dice = random.randint(1, 6)
+            dicepurple = dice * 2
+            print(f"Dado bonus {dice} →  +{dicepurple} de basura")
+            player.collect_trash(dicepurple)

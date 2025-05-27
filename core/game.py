@@ -7,14 +7,13 @@ import ctypes
 
 class Game:
     def __init__(self):
-        pygame.init()
 
         user32 = ctypes.windll.user32
+
         self.display_width = user32.GetSystemMetrics(0)
         self.display_height = user32.GetSystemMetrics(1)
-
+        
         self.screen = pygame.display.set_mode((self.display_width, self.display_height), pygame.NOFRAME)
-
         self.base_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 
         pygame.display.set_caption("EcoRally")

@@ -18,13 +18,15 @@ class Player:
             self.trash += amount
 
     def try_recycle(self, timeout):
+        print("¡Has llegado a un Punto de Reciclaje!")
         if self.position.timeout == 0:
             if self.trash >= 20:
                 self.trash = self.trash - 20
                 self.badges += 1
                 self.position.timeout = timeout
-                print("Insignia obtenida")
+                print("¡Nueva insignia obtenida!")
             else:
-                print("No hay suficiente basura")
+                print("No acumulas suficiente basura para reciclar...")
+                print("Necesitas al menos 20 unidades de basura para hacerlo.")
         else:
-            print("Punto de reciclaje ocupado")
+            print("Punto de reciclaje ocupado!")
