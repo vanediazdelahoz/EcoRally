@@ -1,5 +1,6 @@
-import random
+#states/square.py
 
+import random
 
 class Square:
     def __init__(self, id, type):

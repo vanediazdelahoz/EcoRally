@@ -1,17 +1,46 @@
+#states/board_game.py
 # Lógica del tablero principal
 
-from square import Square
-from player import Player
+import sys
+import os
+# Agregar el directorio padre al path para poder importar desde agent/
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from states.square import Square
+from states.player import Player
+from agent.dynaq_agent import DynaQAgent
 import random
+import pickle
 
+# CONFIGURACIÓN DESDE CONSOLA - MODIFICA ESTOS VALORES
+MODO_JUEGO = "humano_vs_agente"  # Opciones: "humano_vs_humano", "humano_vs_agente"
+MODO_ENTRENAMIENTO = True  # True = agente aprende, False = agente solo juega
+EPISODIOS_ENTRENAMIENTO = 50  # Solo se usa si MODO_ENTRENAMIENTO = True
+MOSTRAR_DECISIONES_AGENTE = True  # True = muestra las decisiones del agente
 
-def main():
+def BoardGame(use_agent=None, train_agent=None, agent=None, silent_mode=False):
+    
+    # Usar configuración global si no se pasan parámetros
+    if use_agent is None:
+        use_agent = (MODO_JUEGO == "humano_vs_agente")
+    if train_agent is None:
+        train_agent = MODO_ENTRENAMIENTO
+    
     rounds = 10
     total_recylcing_points = 3
     recycle_timeout = 2
     initial_trash = 10
 
-    # Crear casillas
+    if not silent_mode:
+        print(f"\n{'='*60}")
+        print(f"🎮 ECOrally - TABLERO DE JUEGO")
+        print(f"{'='*60}")
+        print(f"Modo: {'Humano vs Agente' if use_agent else 'Humano vs Humano'}")
+        if use_agent:
+            print(f"Agente: {'Entrenando' if train_agent else 'Solo jugando'}")
+        print(f"{'='*60}\n")
+
+    # Crear casillas (manteniendo tu lógica exacta)
     s0 = Square(0, "blue")
     s1 = Square(1, "red")
     s2 = Square(2, "blue")
@@ -83,7 +112,7 @@ def main():
     s68 = Square(68, "purple")
     s69 = Square(69, "green")
 
-    # Conectar casillas
+    # Conectar casillas (manteniendo tu lógica exacta)
     s0.add_next_square(s1)
     s1.add_next_square(s2)
     s2.add_next_square(s3)
@@ -161,92 +190,185 @@ def main():
 
     possible_recycling_points = [[s2, s4], [s13, s17], [s44], [s56]]
 
-    # Definir puntos de reciclaje posibles
+    # Definir puntos de reciclaje posibles (manteniendo tu lógica exacta)
     def choose_recycle_points(pos_rec, total_rpoints):
         rpoints = []
+        pos_rec_copy = [group[:] for group in pos_rec]  # Crear copia para no modificar el original
         for _ in range(total_rpoints):
-            x = random.randint(0, len(pos_rec) - 1)
-            if len(pos_rec[x]) > 1:
-                y = random.randint(0, len(pos_rec[x]) - 1)
-                rpoints.append(pos_rec[x][y])
-                pos_rec[x][y].set_recycling_point()
-                print(f"Punto de Reciclaje en la casilla {pos_rec[x][y].id}")
-                del pos_rec[x]
+            if not pos_rec_copy:
+                break
+            x = random.randint(0, len(pos_rec_copy) - 1)
+            if len(pos_rec_copy[x]) > 1:
+                y = random.randint(0, len(pos_rec_copy[x]) - 1)
+                rpoints.append(pos_rec_copy[x][y])
+                pos_rec_copy[x][y].set_recycling_point()
+                if not silent_mode:
+                    print(f"Punto de Reciclaje en la casilla {pos_rec_copy[x][y].id}")
+                del pos_rec_copy[x]
             else:
-                rpoints.append(pos_rec[x][0])
-                pos_rec[x][0].set_recycling_point()
-                print(f"Punto de Reciclaje en la casilla {pos_rec[x][0].id}")
-                del pos_rec[x]
+                rpoints.append(pos_rec_copy[x][0])
+                pos_rec_copy[x][0].set_recycling_point()
+                if not silent_mode:
+                    print(f"Punto de Reciclaje en la casilla {pos_rec_copy[x][0].id}")
+                del pos_rec_copy[x]
         return rpoints
 
     recycling_points = choose_recycle_points(
         possible_recycling_points, total_recylcing_points
     )
 
-    # Crear jugador
+    # Crear jugador (manteniendo tu lógica exacta)
     player1 = Player("Lulo")
-    player2 = Player("Venado")
+    player2 = Player("Venado" if not use_agent else "Agente-IA")
     player1.trash = initial_trash
     player2.trash = initial_trash
+    
+    # Configurar agente si es necesario
+    if use_agent:
+        if agent is None:
+            game_agent = DynaQAgent(train_mode=train_agent)
+            # Intentar cargar política si no está en modo entrenamiento
+            if not train_agent:
+                if game_agent.load_policy("agent_policy.pkl"):
+                    if not silent_mode:
+                        print("✓ Política del agente cargada correctamente")
+                else:
+                    if not silent_mode:
+                        print("⚠️  No se encontró política entrenada, usando agente aleatorio")
+        else:
+            game_agent = agent
+    else:
+        game_agent = None
+    
     while True:
         dice1 = random.randint(1, 6)
         dice2 = random.randint(1, 6)
-        print(f"\nTiro inicial — {player1.character}: {dice1} | {player2.character}: {dice2}")
+        if not silent_mode:
+            print(f"\nTiro inicial — {player1.character}: {dice1} | {player2.character}: {dice2}")
         if dice1 > dice2:
-            print(f"{player1.character} comienza")
+            if not silent_mode:
+                print(f"{player1.character} comienza")
             break
         elif dice2 > dice1:
-            print(f"{player2.character} comienza")
+            if not silent_mode:
+                print(f"{player2.character} comienza")
             player1, player2 = player2, player1
             break
         else:
-            print("Empate. Se lanzan los dados de nuevo")
+            if not silent_mode:
+                print("Empate. Se lanzan los dados de nuevo")
 
-    print(f"{player1.character}: Basura: {player1.trash}, Insignias: {player1.badges}")
-    print(f"{player2.character}: Basura: {player2.trash}, Insignias: {player2.badges}")
+    if not silent_mode:
+        print(f"{player1.character}: Basura: {player1.trash}, Insignias: {player1.badges}")
+        print(f"{player2.character}: Basura: {player2.trash}, Insignias: {player2.badges}")
 
     # Iniciar en start
     player1.move_to(s0)
     player2.move_to(s0)
 
-    def move_player(player, timeout):
+    def move_player(player, timeout, is_agent_turn=False, current_round=1):
         if player.position.next_squares:
             if len(player.position.next_squares) > 1:
-                print("Selecciona el camino:")
-                for i in range(len(player.position.next_squares)):
-                    print(f"{i} → Casilla {player.position.next_squares[i].id}")
-                camino = int(input())
+                if not silent_mode:
+                    print("Selecciona el camino:")
+                    for i in range(len(player.position.next_squares)):
+                        print(f"{i} → Casilla {player.position.next_squares[i].id}")
+                
+                if is_agent_turn and game_agent:
+                    # El agente toma la decisión
+                    state = game_agent.encode_state(
+                        player.position, 
+                        rounds - current_round + 1,
+                        player.trash, 
+                        recycling_points,
+                        player.badges,
+                        player1.badges if player == player2 else player2.badges
+                    )
+                    possible_actions = list(range(len(player.position.next_squares)))
+                    action = game_agent.get_action(state, possible_actions)
+                    
+                    if not silent_mode and MOSTRAR_DECISIONES_AGENTE:
+                        print(f"🤖 El agente elige el camino {action}")
+                    
+                    camino = action
+                    
+                    # Guardar para actualización posterior
+                    if train_agent:
+                        game_agent.last_state = state
+                        game_agent.last_action = action
+                else:
+                    # Jugador humano elige
+                    try:
+                        camino = int(input("Tu elección: "))
+                        if camino not in range(len(player.position.next_squares)):
+                            print("Opción inválida, eligiendo 0")
+                            camino = 0
+                    except ValueError:
+                        print("Entrada inválida, eligiendo 0")
+                        camino = 0
+                    
                 player.move_to(player.position.next_squares[camino])
             else:
                 player.move_to(player.position.next_squares[0])
-            if player.position.recycle:
-                player.try_recycle(timeout)
+        if player.position.recycle:
+            player.try_recycle(timeout)
 
-    # Moverse y recolectar basura
+    # Moverse y recolectar basura (manteniendo tu lógica exacta)
     def round(r, player1, player2, timeout, rpoints):
-        print(f"\n━━━ RONDA {r}/{rounds} ━━━")
+        if not silent_mode:
+            print(f"\n━━━ RONDA {r}/{rounds} ━━━")
 
-        print(f"\nTurno de {player1.character}")
+        if not silent_mode:
+            print(f"\nTurno de {player1.character}")
         dice1 = random.randint(1, 6)
         dice2 = random.randint(1, 6)
         dice = dice1 + dice2
-        print(f"Dados: {dice1} y {dice2}  →  Total {dice}")
+        if not silent_mode:
+            print(f"Dados: {dice1} y {dice2}  →  Total {dice}")
         for _ in range(dice):
-            move_player(player1, timeout)
-        print(f"{player1.character} avanza hasta la casilla {player1.position.id}")
+            move_player(player1, timeout, is_agent_turn=False, current_round=r)
+        if not silent_mode:
+            print(f"{player1.character} avanza hasta la casilla {player1.position.id}")
         player1.position.effect(player1)
-        print(f"Inventario — Insignias: {player1.badges} | Basura: {player1.trash}")
+        if not silent_mode:
+            print(f"Inventario — Insignias: {player1.badges} | Basura: {player1.trash}")
 
-        print(f"\nTurno de {player2.character}")
+        if not silent_mode:
+            print(f"\nTurno de {player2.character}")
         dice1 = random.randint(1, 6)
         dice2 = random.randint(1, 6)
         dice = dice1 + dice2
-        print(f"Dados: {dice1} y {dice2}  →  Total {dice}")
+        if not silent_mode:
+            print(f"Dados: {dice1} y {dice2}  →  Total {dice}")
+        
+        # Guardar estado anterior para el agente
+        if use_agent and train_agent and game_agent:
+            game_agent.last_trash = player2.trash
+            game_agent.last_badges = player2.badges
+        
         for _ in range(dice):
-            move_player(player2, timeout)
-        print(f"{player2.character} avanza hasta la casilla {player2.position.id}")
+            move_player(player2, timeout, is_agent_turn=use_agent, current_round=r)
+        if not silent_mode:
+            print(f"{player2.character} avanza hasta la casilla {player2.position.id}")
         player2.position.effect(player2)
-        print(f"Inventario — Insignias: {player2.badges} | Basura: {player2.trash}")
+        if not silent_mode:
+            print(f"Inventario — Insignias: {player2.badges} | Basura: {player2.trash}")
+        
+        # Actualizar agente si está en modo entrenamiento
+        if use_agent and train_agent and game_agent and hasattr(game_agent, 'last_state'):
+            reward = game_agent.calculate_reward(player2, player1, recycling_points)
+            next_state = game_agent.encode_state(
+                player2.position, 
+                rounds - r,
+                player2.trash, 
+                recycling_points,
+                player2.badges,
+                player1.badges
+            )
+            next_possible_actions = list(range(len(player2.position.next_squares))) if player2.position.next_squares else [0]
+            
+            if hasattr(game_agent, 'last_action'):
+                game_agent.update(game_agent.last_state, game_agent.last_action, next_state, reward, next_possible_actions)
         
         for i in rpoints:
             if i.timeout > 0:
@@ -255,28 +377,92 @@ def main():
     for r in range(rounds):
         round(r + 1, player1, player2, recycle_timeout, recycling_points)
     
-    print("\n¡Fin del juego!")
-    print("Resultados finales:")
-    print(f'{player1.character} — Insignias: {player1.badges} | Basura restante: {player1.trash}')
-    print(f'{player2.character} — Insignias: {player2.badges} | Basura restante: {player2.trash}')
-    
-    print("")
+    if not silent_mode:
+        print("\n¡Fin del juego!")
+        print("Resultados finales:")
+        print(f'{player1.character} — Insignias: {player1.badges} | Basura restante: {player1.trash}')
+        print(f'{player2.character} — Insignias: {player2.badges} | Basura restante: {player2.trash}')
+        print("")
 
+    player2_won = False
     if (player1.badges > player2.badges):
-        print(f'{player1.character} gana la partida con más insignias que su oponente.')
-        print(f'¡Felicidades, {player1.character}! ¡Has ganado!')
-    elif (player2.badges < player1.badges):
-        print(f'{player2.character} gana la partida con más insignias que su oponente.')
-        print(f'¡Felicidades, {player2.character}! ¡Has ganado!')
+        if not silent_mode:
+            print(f'{player1.character} gana la partida con más insignias que su oponente.')
+            print(f'¡Felicidades, {player1.character}! ¡Has ganado!')
+    elif (player2.badges > player1.badges):
+        if not silent_mode:
+            print(f'{player2.character} gana la partida con más insignias que su oponente.')
+            print(f'¡Felicidades, {player2.character}! ¡Has ganado!')
+        player2_won = True
     else:
         if (player1.trash > player2.trash):
-            print(f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {player1.character} gana la partida gracias a su mayor esfuerzo recolectando basura.') 
-            print(f'¡Felicidades, {player1.character}! ¡Has ganado!')
+            if not silent_mode:
+                print(f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {player1.character} gana la partida gracias a su mayor esfuerzo recolectando basura.') 
+                print(f'¡Felicidades, {player1.character}! ¡Has ganado!')
         elif (player2.trash > player1.trash):
-            print(f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {player2.character} gana la partida gracias a su mayor esfuerzo recolectando basura.') 
-            print(f'¡Felicidades, {player2.character}! ¡Has ganado!')
+            if not silent_mode:
+                print(f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {player2.character} gana la partida gracias a su mayor esfuerzo recolectando basura.') 
+                print(f'¡Felicidades, {player2.character}! ¡Has ganado!')
+            player2_won = True
         else:
-            print("¡Es un empate total! Ambos jugadores tienen las mismas insignias y basura.")
+            if not silent_mode:
+                print("¡Es un empate total! Ambos jugadores tienen las mismas insignias y basura.")
+    
+    # Finalizar episodio para el agente
+    if use_agent and train_agent and game_agent:
+        game_agent.end_episode(won=player2_won)
+        # Guardar política cada cierto número de episodios
+        if hasattr(game_agent, 'episode_count') and game_agent.episode_count % 50 == 0:
+            game_agent.save_policy("agent_policy.pkl")
+    
+    return player2_won if use_agent else None
+
+def entrenar_agente_automatico():
+    """Función para entrenar el agente automáticamente"""
+    print(f"\n🚀 INICIANDO ENTRENAMIENTO AUTOMÁTICO")
+    print(f"Episodios: {EPISODIOS_ENTRENAMIENTO}")
+    print(f"{'='*60}")
+    
+    agent = DynaQAgent(train_mode=True)
+    
+    # Intentar cargar política previa
+    if agent.load_policy("agent_policy.pkl"):
+        print("✓ Política previa cargada")
+    
+    victorias = 0
+    
+    for i in range(EPISODIOS_ENTRENAMIENTO):
+        if i % 50 == 0:
+            print(f"Episodio {i+1}/{EPISODIOS_ENTRENAMIENTO} - Epsilon: {agent.epsilon:.3f}")
+        
+        won = BoardGame(use_agent=True, train_agent=True, agent=agent, silent_mode=True)
+        if won:
+            victorias += 1
+        
+        if (i + 1) % 100 == 0:
+            tasa_victoria = (victorias / (i + 1)) * 100
+            print(f"Progreso: {i+1}/{EPISODIOS_ENTRENAMIENTO} - Victorias: {tasa_victoria:.1f}%")
+    
+    agent.save_policy("agent_policy.pkl")
+    print(f"\n✅ ENTRENAMIENTO COMPLETADO")
+    print(f"Tasa final de victorias: {(victorias/EPISODIOS_ENTRENAMIENTO)*100:.1f}%")
+    print(f"Estados aprendidos: {len(agent.Q)}")
 
 if __name__ == "__main__":
-    main()
+    print("🎮 ECORALLEY - CONFIGURACIÓN ACTUAL:")
+    print(f"Modo de juego: {MODO_JUEGO}")
+    print(f"Modo entrenamiento: {MODO_ENTRENAMIENTO}")
+    if MODO_ENTRENAMIENTO:
+        print(f"Episodios de entrenamiento: {EPISODIOS_ENTRENAMIENTO}")
+    print("\n" + "="*60)
+    
+    if MODO_ENTRENAMIENTO and MODO_JUEGO == "humano_vs_agente":
+        print("🤖 Iniciando entrenamiento automático...")
+        entrenar_agente_automatico()
+        print("\n¿Quieres jugar una partida de prueba? (s/n)")
+        if input().lower() == 's':
+            # Cambiar a modo juego para la prueba
+            MODO_ENTRENAMIENTO = False
+            BoardGame()
+    else:
+        BoardGame()
