@@ -9,6 +9,7 @@ from core.utils import load_font
 class ModeSelection(State):
     def __init__(self, game):
         super().__init__(game)
+        pygame.mouse.set_visible(False)
 
         self.font_title = load_font("assets/fonts/PublicPixel.ttf", 28)
         self.font_button_main = load_font("assets/fonts/PublicPixel.ttf", 16)

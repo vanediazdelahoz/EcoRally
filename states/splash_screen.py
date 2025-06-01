@@ -33,6 +33,8 @@ def render_text_with_outline(font, text, text_color, outline_color):
 class SplashScreen(State):
     def __init__(self, game):
         super().__init__(game)
+        pygame.mouse.set_visible(False)
+        
         self.phase = "menu"
         self.options = ["Jugar", "Opciones", "Salir"]
         self.selected_option = 0
