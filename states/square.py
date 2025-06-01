@@ -1,6 +1,5 @@
 import random
 
-
 class Square:
     def __init__(self, id, type):
         self.id = id
@@ -19,19 +18,24 @@ class Square:
     def set_recycling_point(self):
         self.recycle = True
 
-    def effect(self, player):
+    def effect(self, player, silent_mode=False):
         # Basado en el tipo de casilla (designado por color) se activa un efecto
         if self.type == "blue":
-            print("Casilla azul")
+            if not silent_mode:
+                print("Casilla azul")
         elif self.type == "green":
-            print(f"Casilla verde: Ganas 3 de basura")
+            if not silent_mode:
+                print(f"Casilla verde: Ganas 3 de basura")
             player.collect_trash(3)
         elif self.type == "red":
-            print(f"Oh no… ¡Casilla roja! Has perdido 3 de basura.")
+            if not silent_mode:
+                print(f"Oh no… ¡Casilla roja! Has perdido 3 de basura.")
             player.collect_trash(-3)
         elif self.type == "purple":
-            print("¡Casilla morada! Lanza el dado bonus:")
+            if not silent_mode:
+                print("¡Casilla morada! Lanza el dado bonus:")
             dice = random.randint(1, 6)
             dicepurple = dice * 2
-            print(f"Dado bonus {dice} →  +{dicepurple} de basura")
+            if not silent_mode:
+                print(f"Dado bonus {dice} →  +{dicepurple} de basura")
             player.collect_trash(dicepurple)
