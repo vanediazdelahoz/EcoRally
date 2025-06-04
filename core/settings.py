@@ -15,6 +15,8 @@ GREEN = (11,113,0)
 YELLOW = (252,244,172)
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
+ORIGINAL_WIDTH = 3072
+ORIGINAL_HEIGHT = 2048
 MARRON = (132,55,39)
 
 def get_coordinate(S_Width, S_Height): 
