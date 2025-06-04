@@ -1,241 +1,350 @@
 # states/character_selection.py
 import pygame
+import random
 from core.config import config
 from core.state import State
-from core.settings import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE, GREEN, LIGHT_GRAY, GREY
+from core.settings import SCREEN_WIDTH, SCREEN_HEIGHT, WHITE
 from core.utils import load_font, get_character
-
+from core.background_manager import BackgroundManager
+from core.effects import TransitionEffect
 
 class CharacterSelection(State):
     def __init__(self, game):
         super().__init__(game)
         pygame.mouse.set_visible(False)
-
-        self.font_title = load_font("assets/fonts/PublicPixel.ttf", 28)
-        self.font_button = load_font("assets/fonts/mc-ten-lowercase-alt.ttf", 14)
-
-        # Texto y sombra
-        self.title_text = self.font_title.render("SELECCIONA TU PERSONAJE", True, WHITE)
-        self.title_shadow = self.font_title.render("SELECCIONA TU PERSONAJE", True, BLACK)
-
-        # Posición del texto
-        self.title_rect = self.title_text.get_rect(center=(SCREEN_WIDTH // 2, 130))
-        self.shadow_rect = self.title_shadow.get_rect(center=(SCREEN_WIDTH // 2 + 2, 132))  # sombra ligeramente desplazada
-
-        try:
-            self.bg_imagec = pygame.image.load("assets/images/clouds_twilight.png").convert_alpha()
-            self.bg_imagec = pygame.transform.scale(self.bg_imagec, (SCREEN_WIDTH, SCREEN_HEIGHT))
-            self.bg_scrollc = 0
-            self.bg_widthc = self.bg_imagec.get_width()
-        except Exception as e:
-            print("Error cargando nubes:", e)
-            self.bg_imagec = None
         
-        try:
-            self.bg_image = pygame.image.load("assets/images/forest.png").convert_alpha()
-            self.bg_image = pygame.transform.scale(self.bg_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
-            self.bg_scroll = 0
-            self.bg_width = self.bg_image.get_width()
-        except Exception as e:
-            print("Error cargando fondo bosque:", e)
-            self.bg_image = None
-
-        try:
-            self.overlay_image = pygame.image.load("assets/images/filtro_naranja.png").convert_alpha()
-            self.overlay_image = pygame.transform.scale(self.overlay_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
-        except Exception as e:
-            print("Error cargando imagen de filtro:", e)
-            self.overlay_image = None
-
-
-        self.cloud_speed = 30
-        self.forest_speed = 50
-
-        # Personajes escalados
-        character_paths = get_character(4) 
-
+        # Gestor de fondo con fondo1.png
+        self.background = BackgroundManager()
+        
+        # Efecto de transición
+        self.transition = TransitionEffect(0.15)
+        self.transition.start_fade_in()
+        
+        # Control de transición - INICIALIZAR PRIMERO
+        self.transitioning = False
+        self.can_handle_input = True
+        
+        # Fuentes - DEFINIR ANTES DE USAR
+        self.font_title = load_font("assets/fonts/PublicPixel.ttf", 28)
+        self.font_button = load_font("assets/fonts/PublicPixel.ttf", 18)
+        self.font_controls = load_font("assets/fonts/mc-ten-lowercase-alt.ttf", 11)
+        self.label_font = load_font("assets/fonts/PublicPixel.ttf", 14)  # DEFINIR AQUÍ
+        
+        # === CONFIGURACIÓN DE POSICIONES (AJUSTABLE) ===
+        self.title_y_position = 80  # Posición Y del título (ajustable)
+        self.panels_y_position = 180  # Posición Y de los paneles (ajustable)
+        self.panel_width = 160       # Ancho de paneles (ajustable)
+        self.panel_height = 220      # Alto de paneles (ajustable)
+        self.panels_spacing = 200    # Espaciado entre paneles (ajustable)
+        self.arrow_distance = 90     # Distancia de flechas a paneles (ajustable)
+        self.arrow_size = 150         # Tamaño de las flechas (ajustable)
+        
+        # Título CON SOMBREADO GRIS
+        self.title_surface = self._render_text_with_shadow(self.font_title, "SELECCIONA TU PERSONAJE", WHITE)
+        self.title_rect = self.title_surface.get_rect(center=(SCREEN_WIDTH // 2, self.title_y_position))
+        
+        # Cargar personajes
+        character_paths = get_character(4)
         self.character_names = ["Rosalba", "Icm", "Sofia", "Luis"]
         self.characters = []
-        i = 0
-        for path in character_paths:
+        
+        for i, path in enumerate(character_paths):
             try:
-                if i < 2 :
-                    img = pygame.image.load(path).convert_alpha()
-                    img = pygame.transform.scale(img, (99, 180))  # Escalar a tamaño uniforme
-                    self.characters.append(img)
+                img = pygame.image.load(path).convert_alpha()
+                if i < 2:
+                    img = pygame.transform.scale(img, (99, 180))
                 else:
-                    img = pygame.image.load(path).convert_alpha()
-                    img = pygame.transform.scale(img, (107, 153))  # Escalar a tamaño uniforme
-                    self.characters.append(img)
-                i += 1
+                    img = pygame.transform.scale(img, (107, 153))
+                self.characters.append(img)
             except Exception as e:
                 print(f"Error cargando personaje en {path}:", e)
-
-
-        self.selected_j1 = 0
-        self.selected_j2 = 1
-        self.final_j1 = None
-        self.final_j2 = None
-        config.characters.append(self.final_j1)
-        config.characters.append(self.final_j2)
-
-        vertical_offset = 40
-
-        # Paneles más pequeños
-        self.panel_width = 141
-        self.panel_height = 213
-        spacing = 160  # más separación entre paneles
-        total_width = self.panel_width * 2 + spacing
+        
+        # Variables de selección
+        self.selected_p1 = 0
+        self.selected_p2 = 1
+        self.confirmed_p1 = False
+        self.confirmed_p2 = False
+        self.final_p1 = None
+        self.final_p2 = None
+        
+        # Limpiar configuración anterior
+        config.characters.clear()
+        config.characters.extend([None, None])
+        
+        # Configuración de paneles
+        total_width = self.panel_width * 2 + self.panels_spacing
         start_x = (SCREEN_WIDTH - total_width) // 2
-
-        self.j1_rect = pygame.Rect(start_x, 160 + vertical_offset, self.panel_width, self.panel_height)
-        self.j2_rect = pygame.Rect(start_x + self.panel_width + spacing, 160 + vertical_offset, self.panel_width, self.panel_height)
-
-        button_w, button_h = 130, 40
-        self.button_j1 = pygame.Rect(self.j1_rect.centerx - button_w // 2, self.j1_rect.bottom + 15, button_w, button_h)
-        self.button_j2 = pygame.Rect(self.j2_rect.centerx - button_w // 2, self.j2_rect.bottom + 15, button_w, button_h)
-
+        
+        self.p1_rect = pygame.Rect(start_x, self.panels_y_position, self.panel_width, self.panel_height)
+        self.p2_rect = pygame.Rect(start_x + self.panel_width + self.panels_spacing, self.panels_y_position, self.panel_width, self.panel_height)
+        
+        # Labels CON SOMBREADO
+        self.p1_label = self._render_text_with_shadow(self.label_font, "JUGADOR 1", WHITE)
+        self.p2_label = self._render_text_with_shadow(self.label_font, "JUGADOR 2" if not config.machine_mode else "BOT", WHITE)
+        
+        # Cargar imagen de flecha RESPETANDO PROPORCIONES
+        try:
+            flecha_original = pygame.image.load("assets/images/landscape/flecha.png").convert_alpha()
+            
+            # Calcular escala manteniendo proporción
+            original_width = flecha_original.get_width()
+            original_height = flecha_original.get_height()
+            
+            # Calcular escala para que el lado más grande sea arrow_size
+            scale = self.arrow_size / max(original_width, original_height)
+            
+            # Calcular nuevas dimensiones manteniendo proporción
+            new_width = int(original_width * scale)
+            new_height = int(original_height * scale)
+            
+            # Escalar manteniendo proporción
+            self.flecha_right = pygame.transform.scale(flecha_original, (new_width, new_height))
+            # Rotar para crear flecha izquierda
+            self.flecha_left = pygame.transform.rotate(self.flecha_right, 180)
+        except Exception as e:
+            print(f"Error cargando flecha.png: {e}")
+            # Crear flechas simples como fallback
+            self.flecha_right = pygame.Surface((self.arrow_size, self.arrow_size))
+            self.flecha_right.fill(WHITE)
+            self.flecha_left = self.flecha_right.copy()
+        
+        # Instrucciones de controles
+        self.controls_p1 = [
+            "A/D - Cambiar",
+            "F - Confirmar"
+        ]
+        self.controls_p2 = [
+            "←/→ - Cambiar", 
+            "Enter - Confirmar"
+        ] if not config.machine_mode else ["Automático"]
+        
+        # Flag para evitar ESC después de confirmación completa
+        self.both_confirmed = False
+    
+    def _render_text_with_shadow(self, font, text, text_color, shadow_color=(128, 128, 128), shadow_offset=2):
+        """Renderiza texto con sombreado gris"""
+        shadow_surface = font.render(text, True, shadow_color)
+        text_surface = font.render(text, True, text_color)
+        
+        combined_width = text_surface.get_width() + shadow_offset
+        combined_height = text_surface.get_height() + shadow_offset
+        combined_surface = pygame.Surface((combined_width, combined_height), pygame.SRCALPHA)
+        
+        combined_surface.blit(shadow_surface, (shadow_offset, shadow_offset))
+        combined_surface.blit(text_surface, (0, 0))
+        
+        return combined_surface
+    
     def handle_event(self, event):
+        if not self.can_handle_input or self.transitioning or self.transition.active:
+            return
+            
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                self.game.state_stack.pop()
-
-            # Selección de personajes jugador 1:
-            elif config.machine_mode is False and event.key == pygame.K_a:
-                self.selected_j1 = (self.selected_j1 - 1) % len(self.characters)
-            elif config.machine_mode is False and event.key == pygame.K_d:
-                self.selected_j1 = (self.selected_j1 + 1) % len(self.characters)
-            elif config.machine_mode is False and event.key == pygame.K_f:
-                if self.final_j2 is None or self.selected_j1 != self.final_j2:
-                    self.final_j1 = self.selected_j1
-                    config.characters[0] = self.final_j1
-                    print(f"Jugador 1 seleccionó personaje {self.final_j1} con F")
-                else:
-                    print("Ese personaje ya fue seleccionado por Jugador 2.")
-
-            # Selección de personajes jugador 2
-            elif event.key == pygame.K_LEFT:
-                self.selected_j2 = (self.selected_j2 - 1) % len(self.characters)
-            elif event.key == pygame.K_RIGHT:
-                self.selected_j2 = (self.selected_j2 + 1) % len(self.characters)
-
-            elif event.key == pygame.K_RETURN:
-                if self.final_j1 is None or self.final_j1 != self.selected_j2:
-                    self.final_j2 = self.selected_j2
-                    config.characters[1] = self.final_j2
-                    print(f"Jugador 2 seleccionó personaje {self.final_j2} con Enter")
-                    
-                    if config.machine_mode:
-                        # Escoge un personaje para la máquina que no sea el mismo que el del jugador 2
-                        if 0 != self.final_j2:
-                            i = 0
-                        else:
-                            i = 1
-                        self.selected_j1 = i
-                        self.final_j1 = i
-                        config.characters[0] = self.final_j1
-                        print(f"La máquina seleccionó automáticamente al personaje {i}")
-
-                        if None not in config.characters:
-                            from states.visual_board_game import BoardGameView
-                            self.game.state_stack.append(BoardGameView(self.game))
+            # ESC solo funciona si NO ambos han confirmado
+            if event.key == pygame.K_ESCAPE and not self.both_confirmed:
+                self._start_transition(lambda: self.game.state_stack.pop())
+            
+            # Controles Player 1
+            elif event.key == pygame.K_a and not self.confirmed_p1:
+                self.selected_p1 = (self.selected_p1 - 1) % len(self.characters)
+            elif event.key == pygame.K_d and not self.confirmed_p1:
+                self.selected_p1 = (self.selected_p1 + 1) % len(self.characters)
+            elif event.key == pygame.K_f:
+                if not self.confirmed_p1:
+                    # Confirmar selección P1
+                    if not self.confirmed_p2 or self.selected_p1 != self.final_p2:
+                        self.confirmed_p1 = True
+                        self.final_p1 = self.selected_p1
+                        config.characters[0] = self.final_p1
+                        print(f"Jugador 1 confirmó personaje {self.final_p1}: {self.character_names[self.final_p1]}")
+                        
+                        if config.machine_mode:
+                            # Bot selecciona automáticamente
+                            available_chars = [i for i in range(len(self.characters)) if i != self.final_p1]
+                            self.final_p2 = random.choice(available_chars)
+                            self.selected_p2 = self.final_p2
+                            self.confirmed_p2 = True
+                            config.characters[1] = self.final_p2
+                            print(f"Bot seleccionó automáticamente personaje {self.final_p2}: {self.character_names[self.final_p2]}")
                             
+                            # Marcar como completamente confirmado
+                            self.both_confirmed = True
+                            
+                            # Ir al juego INMEDIATAMENTE
+                            def go_to_game():
+                                from states.visual_board_game import BoardGameView
+                                self.game.state_stack.append(BoardGameView(self.game))
+                            self._start_transition(go_to_game)
+                    else:
+                        print("Ese personaje ya fue seleccionado por el otro jugador.")
                 else:
-                    print("Ese personaje ya fue seleccionado por Jugador 1.")
-
-            if None not in config.characters:
-                    from states.visual_board_game import BoardGameView
-                    self.game.state_stack.append(BoardGameView(self.game))
-
-
+                    # Retractarse P1
+                    if not self.both_confirmed:
+                        self.confirmed_p1 = False
+                        self.final_p1 = None
+                        config.characters[0] = None
+                        print("Jugador 1 se retractó de su selección")
+                        
+                        # Si era modo bot, también resetear bot
+                        if config.machine_mode:
+                            self.confirmed_p2 = False
+                            self.final_p2 = None
+                            config.characters[1] = None
+                            self.both_confirmed = False
+            
+            # Controles Player 2 (solo si no es bot)
+            elif not config.machine_mode:
+                if event.key == pygame.K_LEFT and not self.confirmed_p2:
+                    self.selected_p2 = (self.selected_p2 - 1) % len(self.characters)
+                elif event.key == pygame.K_RIGHT and not self.confirmed_p2:
+                    self.selected_p2 = (self.selected_p2 + 1) % len(self.characters)
+                elif event.key == pygame.K_RETURN:
+                    if not self.confirmed_p2:
+                        # Confirmar selección P2
+                        if not self.confirmed_p1 or self.selected_p2 != self.final_p1:
+                            self.confirmed_p2 = True
+                            self.final_p2 = self.selected_p2
+                            config.characters[1] = self.final_p2
+                            print(f"Jugador 2 confirmó personaje {self.final_p2}: {self.character_names[self.final_p2]}")
+                            
+                            # Verificar si ambos han confirmado
+                            if self.confirmed_p1 and self.confirmed_p2:
+                                self.both_confirmed = True
+                                # Ir al juego INMEDIATAMENTE
+                                def go_to_game():
+                                    from states.visual_board_game import BoardGameView
+                                    self.game.state_stack.append(BoardGameView(self.game))
+                                self._start_transition(go_to_game)
+                        else:
+                            print("Ese personaje ya fue seleccionado por el otro jugador.")
+                    else:
+                        # Retractarse P2
+                        if not self.both_confirmed:
+                            self.confirmed_p2 = False
+                            self.final_p2 = None
+                            config.characters[1] = None
+                            print("Jugador 2 se retractó de su selección")
+    
+    def _start_transition(self, callback):
+        self.transitioning = True
+        self.can_handle_input = False
+        self.transition.start_fade_out(callback)
+    
     def update(self, dt):
-        if self.bg_image:
-            self.bg_scroll -= self.forest_speed * dt
-            if self.bg_scroll <= -self.bg_width:
-                self.bg_scroll = 0
-
-        if self.bg_imagec:
-            self.bg_scrollc -= self.cloud_speed * dt
-            if self.bg_scrollc <= -self.bg_widthc:
-                self.bg_scrollc = 0
-
-    def _draw_arrow(self, surface, x, y, direction="left", color = LIGHT_GRAY):
-        size = 20
-        if direction == "left":
-            points = [(x, y), (x + size, y - size), (x + size, y + size)]
-        else:
-            points = [(x, y), (x - size, y - size), (x - size, y + size)]
-        pygame.draw.polygon(surface, color, points)
-
+        self.background.update(dt)
+        self.transition.update(dt)
+        
+        if not self.transition.active and self.transitioning:
+            self.transitioning = False
+            self.can_handle_input = True
+    
     def render(self, screen):
-        if self.bg_imagec:
-            screen.blit(self.bg_imagec, (self.bg_scrollc, 0))
-            screen.blit(self.bg_imagec, (self.bg_scrollc + self.bg_widthc, 0))
-
-        if self.overlay_image:
-            self.overlay_image.set_alpha(240)
-            screen.blit(self.overlay_image, (0, 0))
+        # Renderizar fondo1.png
+        self.background.render(screen)
         
-        if self.bg_image:
-            screen.blit(self.bg_image, (self.bg_scroll, 0))
-            screen.blit(self.bg_image, (self.bg_scroll + self.bg_width, 0))
-
-        if self.overlay_image:
-            self.overlay_image.set_alpha(60)
-            screen.blit(self.overlay_image, (0, 0))
-
-
-        screen.blit(self.title_shadow, self.shadow_rect)
-        screen.blit(self.title_text, self.title_rect)
-
-        # Paneles con fondo + borde
-        pygame.draw.rect(screen, LIGHT_GRAY, self.j1_rect, border_radius=10)  # fondo
-        pygame.draw.rect(screen, WHITE, self.j1_rect, 2, border_radius=10)  # borde
-
+        # Título
+        screen.blit(self.title_surface, self.title_rect)
         
-        pygame.draw.rect(screen, LIGHT_GRAY, self.j2_rect, border_radius=10)
-        pygame.draw.rect(screen, WHITE, self.j2_rect, 2, border_radius=10)
-
-
-        char_j1 = self.characters[self.selected_j1]
-        char_rect_j1 = char_j1.get_rect(center=self.j1_rect.center)
-        screen.blit(char_j1, char_rect_j1)
-
-        char_j2 = self.characters[self.selected_j2]
-        char_j2_flipped = pygame.transform.flip(char_j2, True, False)
-        char_rect_j2 = char_j2_flipped.get_rect(center=self.j2_rect.center)
-        screen.blit(char_j2_flipped, char_rect_j2)
-
-
-        # Flechas marrón oscuro
-        arrow_color_j1 = WHITE if config.machine_mode else LIGHT_GRAY
-        self._draw_arrow(screen, self.j1_rect.left - 35, self.j1_rect.centery, "left", arrow_color_j1)
-        self._draw_arrow(screen, self.j1_rect.right + 35, self.j1_rect.centery, "right", arrow_color_j1)
-        self._draw_arrow(screen, self.j2_rect.left - 35, self.j2_rect.centery, "left")
-        self._draw_arrow(screen, self.j2_rect.right + 35, self.j2_rect.centery, "right")
-
-        # Botón jugador 1 con borde
-        pygame.draw.rect(screen, WHITE, self.button_j1, border_radius=6)
-        selecct_color1 = GREEN if self.final_j1 is not None else LIGHT_GRAY
-        pygame.draw.rect(screen, selecct_color1, self.button_j1, 2, border_radius=6)
-
-        nombre_j1 = self.character_names[self.final_j1] if self.final_j1 is not None else self.character_names[self.selected_j1]
-        btn_text_j1 = self.font_button.render(nombre_j1, True, selecct_color1)
-        btn_rect_j1 = btn_text_j1.get_rect(center=self.button_j1.center)
-        screen.blit(btn_text_j1, btn_rect_j1)
-
-
-        # Botón jugador 2 con borde
-        pygame.draw.rect(screen, WHITE, self.button_j2, border_radius=6)
-        selecct_color2 = GREEN if self.final_j2 is not None else LIGHT_GRAY
-        pygame.draw.rect(screen, selecct_color2, self.button_j2, 2, border_radius=6)
-
-        nombre_j2 = self.character_names[self.final_j2] if self.final_j2 is not None else self.character_names[self.selected_j2]
-        btn_text_j2 = self.font_button.render(nombre_j2, True, selecct_color2)
-        btn_rect_j2 = btn_text_j2.get_rect(center=self.button_j2.center)
-        screen.blit(btn_text_j2, btn_rect_j2)
-
+        # Labels de jugadores
+        p1_label_rect = self.p1_label.get_rect(center=(self.p1_rect.centerx, self.p1_rect.top - 20))
+        p2_label_rect = self.p2_label.get_rect(center=(self.p2_rect.centerx, self.p2_rect.top - 20))
+        screen.blit(self.p1_label, p1_label_rect)
+        screen.blit(self.p2_label, p2_label_rect)
         
+        # Instrucciones de controles
+        self._draw_controls(screen)
+        
+        # Paneles de personajes
+        self._draw_character_panel(screen, self.p1_rect, self.selected_p1, self.confirmed_p1, "p1")
+        self._draw_character_panel(screen, self.p2_rect, self.selected_p2, self.confirmed_p2, "p2")
+        
+        # Flechas usando la imagen flecha.png (solo si no está confirmado)
+        if not self.confirmed_p1:
+            # Flecha izquierda
+            left_arrow_pos = (self.p1_rect.left - self.arrow_distance, self.p1_rect.centery - self.flecha_left.get_height() // 2)
+            screen.blit(self.flecha_left, left_arrow_pos)
+            
+            # Flecha derecha
+            right_arrow_pos = (self.p1_rect.right + self.arrow_distance - self.flecha_right.get_width(), self.p1_rect.centery - self.flecha_right.get_height() // 2)
+            screen.blit(self.flecha_right, right_arrow_pos)
+        
+        if not config.machine_mode and not self.confirmed_p2:
+            # Flecha izquierda
+            left_arrow_pos = (self.p2_rect.left - self.arrow_distance, self.p2_rect.centery - self.flecha_left.get_height() // 2)
+            screen.blit(self.flecha_left, left_arrow_pos)
+            
+            # Flecha derecha
+            right_arrow_pos = (self.p2_rect.right + self.arrow_distance - self.flecha_right.get_width(), self.p2_rect.centery - self.flecha_right.get_height() // 2)
+            screen.blit(self.flecha_right, right_arrow_pos)
+        
+        # Botones de nombres
+        self._draw_character_button(screen, self.p1_rect, self.confirmed_p1, self.selected_p1, "p1")
+        self._draw_character_button(screen, self.p2_rect, self.confirmed_p2, self.selected_p2, "p2")
+        
+        # Renderizar transición
+        self.transition.render(screen)
+    
+    def _draw_controls(self, screen):
+        """Dibuja las instrucciones de controles CON SOMBREADO"""
+        # Controles P1
+        y_start = self.p1_rect.top - 50
+        for i, control in enumerate(self.controls_p1):
+            text = self._render_text_with_shadow(self.font_controls, control, WHITE, (100, 100, 100), 1)
+            text_rect = text.get_rect(center=(self.p1_rect.centerx, y_start + i * 12))
+            screen.blit(text, text_rect)
+        
+        # Controles P2
+        y_start = self.p2_rect.top - 50
+        for i, control in enumerate(self.controls_p2):
+            text = self._render_text_with_shadow(self.font_controls, control, WHITE, (100, 100, 100), 1)
+            text_rect = text.get_rect(center=(self.p2_rect.centerx, y_start + i * 12))
+            screen.blit(text, text_rect)
+    
+    def _draw_character_panel(self, screen, rect, selected_idx, is_confirmed, player):
+        # Color del panel (opcional, puede ser transparente)
+        if is_confirmed:
+            panel_color = (40, 80, 40, 100)  # Verde semi-transparente
+        else:
+            panel_color = (60, 60, 60, 100)  # Gris semi-transparente
+        
+        # Crear superficie con transparencia
+        panel_surface = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        panel_surface.fill(panel_color)
+        screen.blit(panel_surface, rect)
+        
+        # Borde blanco
+        pygame.draw.rect(screen, WHITE, rect, 2)
+        
+        # Personaje
+        char = self.characters[selected_idx]
+        
+        # Voltear personaje de player 2
+        if player == "p2":
+            char = pygame.transform.flip(char, True, False)
+        
+        char_rect = char.get_rect(center=rect.center)
+        screen.blit(char, char_rect)
+    
+    def _draw_character_button(self, screen, panel_rect, is_confirmed, selected_idx, player):
+        # Texto del botón
+        name = self.character_names[selected_idx]
+        
+        if player == "p2" and config.machine_mode:
+            name = f"Bot: {name}"
+        
+        if is_confirmed:
+            name += " ✓"
+        
+        # Crear superficie de texto CON SOMBREADO
+        if is_confirmed:
+            # Texto más grande cuando está confirmado
+            button_font = load_font("assets/fonts/PublicPixel.ttf", 20)
+            text_surface = self._render_text_with_shadow(button_font, name, WHITE, (100, 100, 100), 2)
+        else:
+            text_surface = self._render_text_with_shadow(self.font_button, name, WHITE, (100, 100, 100), 1)
+        
+        # Posición centrada debajo del panel
+        text_rect = text_surface.get_rect(center=(panel_rect.centerx, panel_rect.bottom + 30))
+        screen.blit(text_surface, text_rect)
 
-
-
+print("CharacterSelection rediseñado - va al BoardGameState")

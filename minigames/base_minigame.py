@@ -1,1 +1,0 @@
-# Clase base para compartir lógica entre minijuegos

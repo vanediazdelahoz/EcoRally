@@ -10,10 +10,12 @@ WHITE = (255, 255, 255)
 GREY = (0,15,25)
 LIGHT_GRAY = (50, 50, 50)
 BLACK = (0, 0, 0)
+LIGHT_GREEN =(144, 243, 0)
 GREEN = (11,113,0)
 YELLOW = (252,244,172)
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
+MARRON = (132,55,39)
 
 def get_coordinate(S_Width, S_Height): 
        
