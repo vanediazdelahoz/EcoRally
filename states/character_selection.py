@@ -76,8 +76,10 @@ class CharacterSelection(State):
         self.selected_j2 = 1
         self.final_j1 = None
         self.final_j2 = None
-        config.characters.append(self.final_j1)
-        config.characters.append(self.final_j2)
+        config.characters = [None, None]
+        config.characters[0] = self.final_j1
+        config.characters[1] = self.final_j2
+
 
         vertical_offset = 40
 
@@ -135,10 +137,6 @@ class CharacterSelection(State):
                         self.final_j1 = i
                         config.characters[0] = self.final_j1
                         print(f"La máquina seleccionó automáticamente al personaje {i}")
-
-                        if None not in config.characters:
-                            from states.visual_board_game import BoardGameView
-                            self.game.state_stack.append(BoardGameView(self.game))
                             
                 else:
                     print("Ese personaje ya fue seleccionado por Jugador 1.")
