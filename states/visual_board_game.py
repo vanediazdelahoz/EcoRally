@@ -624,7 +624,7 @@ class BoardGameView(State):
                     player_data["pos_actual"] = list(player_data["move_to"])
                     player_data["pos_idx"] = player_data["target_idx"]
                     player_data["moving"] = False
-                    player_data["anim_frame"] = 0
+                    
 
                     # USAR EL MÉTODO move_to DE board_game.py
                     current_player_obj = (
@@ -687,6 +687,7 @@ class BoardGameView(State):
                     else:
                         # Terminó el movimiento completo
                         self.apply_square_effect(current_player_obj)
+                        player_data["anim_frame"] = 0
 
     def process_recycling_point_on_pass(self, player, square):
         """Procesar punto de reciclaje cuando el jugador pasa por él - USANDO LÓGICA DE board_game.py"""

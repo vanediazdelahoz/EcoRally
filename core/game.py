@@ -21,6 +21,10 @@ class Game:
         self.running = True
         self.state_stack = []
         self.load_states()
+        pygame.mixer.init()
+        pygame.mixer.music.load("./music/musica.wav")
+        pygame.mixer.music.set_volume(0.5)
+        pygame.mixer.music.play(loops=-1)
 
     def quit(self):
         pygame.quit()
