@@ -23,13 +23,13 @@ class MainMenu(State):
         self.can_handle_input = True
         
         # Opciones del menú
-        self.options = ["Jugar", "Opciones", "Salir"]
+        self.options = ["Jugar", "Información", "Salir"]
         self.selected_option = 0
         
         # Fuentes
         self.title_font = load_font("assets/fonts/PressStart2P-Regular.ttf", 45)
         self.subtitle_font = load_font("assets/fonts/MinecraftStandard.otf", 16)
-        self.menu_font = load_font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.menu_font = load_font("assets/fonts/PressStart2P-Regular.ttf", 20)
         
         # === CONFIGURACIÓN DE POSICIONES (AJUSTABLE) ===
         self.title_x_position = 170  # Posición X del título (ajustable)
@@ -132,9 +132,9 @@ class MainMenu(State):
         if selected == "Jugar":
             from states.mode_selection import ModeSelection
             self.game.state_stack.append(ModeSelection(self.game))
-        elif selected == "Opciones":
-            from states.options import Options
-            self.game.state_stack.append(Options(self.game))
+        elif selected == "Información":  # CORREGIDO: Cambiado de "Information" a "Información"
+            from states.information import Information
+            self.game.state_stack.append(Information(self.game))
         elif selected == "Salir":
             self.game.quit()
     
@@ -172,5 +172,3 @@ class MainMenu(State):
         
         # Renderizar transición
         self.transition.render(screen)
-
-print("MainMenu rediseñado - título/subtítulo a la izquierda, cartel a la derecha con proporciones respetadas")
