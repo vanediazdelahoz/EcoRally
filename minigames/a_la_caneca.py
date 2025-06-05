@@ -64,13 +64,14 @@ class ALaCanecaState(State):
             self.canecaN.fill((100, 100, 100))
         
         # === CONFIGURACIÓN DE POSICIONES DE CANECAS (AJUSTABLE) ===
-        self.canecas_j1_x_offset = 50    # Posición X inicial para canecas J1 (ajustable)
+        self.canecas_j1_x_offset = 94   # Posición X inicial para canecas J1 (ajustable)
         self.canecas_j1_spacing = 100    # Espaciado entre canecas J1 (ajustable)
         self.canecas_j1_y = 450          # Posición Y de canecas J1 (ajustable)
         
-        self.canecas_j2_x_offset = 500   # Posición X inicial para canecas J2 (ajustable)
+        self.canecas_j2_x_offset = 600   # Posición X inicial para canecas J2 (ajustable)
         self.canecas_j2_spacing = 100    # Espaciado entre canecas J2 (ajustable)
         self.canecas_j2_y = 450          # Posición Y de canecas J2 (ajustable)
+
         
         # Posiciones de canecas calculadas dinámicamente
         self.canecas_j1 = {
@@ -115,6 +116,9 @@ class ALaCanecaState(State):
         # Variables del juego
         self.puntaje1 = 0
         self.puntaje2 = 0
+        self.player2_is_bot = config.machine_mode
+        self.bot_interval = 1500
+        self.bot_last_action_time = pygame.time.get_ticks()
         self.tiempo_limite = 30  # segundos
         self.inicio = pygame.time.get_ticks()
         
@@ -131,63 +135,58 @@ class ALaCanecaState(State):
             self.basura_j1 = random.choice(self.nombres)
         else:
             self.basura_j2 = random.choice(self.nombres)
+
+    def simular_bot_jugador2(self):
+        correcta = self.clasificacion[self.basura_j2]
+        opciones = ["blanca", "negra", "verde"]
+        eleccion = correcta if random.random() < 0.8 else random.choice(opciones)
+
+        if eleccion == "blanca":
+            self.puntaje2 += 1 if correcta == "blanca" else -1
+        elif eleccion == "negra":
+            self.puntaje2 += 1 if correcta == "negra" else -1
+        elif eleccion == "verde":
+            self.puntaje2 += 1 if correcta == "verde" else -1
+
+        self.puntaje2 = max(0, self.puntaje2)
+        self.nueva_basura(2)
     
     def handle_event(self, event):
         if not self.can_handle_input or self.transitioning or self.transition.active:
             return
-        
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self._start_transition(lambda: self.game.state_stack.pop())
-            
             if self.game_state == "PLAYING":
                 correcta_j1 = self.clasificacion[self.basura_j1]
-                correcta_j2 = self.clasificacion[self.basura_j2]
-                
-                # Controles Jugador 1 - CORREGIDO: No permitir puntos negativos
                 if event.key == pygame.K_w:
-                    if correcta_j1 == "blanca":
-                        self.puntaje1 += 1
-                    else:
-                        self.puntaje1 = max(0, self.puntaje1 - 1)  # No bajar de 0
+                    self.puntaje1 += 1 if correcta_j1 == "blanca" else -1
+                    self.puntaje1 = max(0, self.puntaje1)
                     self.nueva_basura(1)
                 elif event.key == pygame.K_a:
-                    if correcta_j1 == "negra":
-                        self.puntaje1 += 1
-                    else:
-                        self.puntaje1 = max(0, self.puntaje1 - 1)  # No bajar de 0
+                    self.puntaje1 += 1 if correcta_j1 == "negra" else -1
+                    self.puntaje1 = max(0, self.puntaje1)
                     self.nueva_basura(1)
                 elif event.key == pygame.K_d:
-                    if correcta_j1 == "verde":
-                        self.puntaje1 += 1
-                    else:
-                        self.puntaje1 = max(0, self.puntaje1 - 1)  # No bajar de 0
+                    self.puntaje1 += 1 if correcta_j1 == "verde" else -1
+                    self.puntaje1 = max(0, self.puntaje1)
                     self.nueva_basura(1)
-                
-                # Controles Jugador 2 - CORREGIDO: No permitir puntos negativos
-                elif event.key == pygame.K_UP:
-                    if correcta_j2 == "blanca":
-                        self.puntaje2 += 1
-                    else:
-                        self.puntaje2 = max(0, self.puntaje2 - 1)  # No bajar de 0
-                    self.nueva_basura(2)
-                elif event.key == pygame.K_LEFT:
-                    if correcta_j2 == "negra":
-                        self.puntaje2 += 1
-                    else:
-                        self.puntaje2 = max(0, self.puntaje2 - 1)  # No bajar de 0
-                    self.nueva_basura(2)
-                elif event.key == pygame.K_RIGHT:
-                    if correcta_j2 == "verde":
-                        self.puntaje2 += 1
-                    else:
-                        self.puntaje2 = max(0, self.puntaje2 - 1)  # No bajar de 0
-                    self.nueva_basura(2)
-            
-            elif self.game_state == "GAME_OVER":
-                if event.key == pygame.K_RETURN:
-                    # Retornar al juego principal con los puntajes
-                    self._end_minigame()
+                elif not self.player2_is_bot:
+                    correcta_j2 = self.clasificacion[self.basura_j2]
+                    if event.key == pygame.K_UP:
+                        self.puntaje2 += 1 if correcta_j2 == "blanca" else -1
+                        self.puntaje2 = max(0, self.puntaje2)
+                        self.nueva_basura(2)
+                    elif event.key == pygame.K_LEFT:
+                        self.puntaje2 += 1 if correcta_j2 == "negra" else -1
+                        self.puntaje2 = max(0, self.puntaje2)
+                        self.nueva_basura(2)
+                    elif event.key == pygame.K_RIGHT:
+                        self.puntaje2 += 1 if correcta_j2 == "verde" else -1
+                        self.puntaje2 = max(0, self.puntaje2)
+                        self.nueva_basura(2)
+            elif self.game_state == "GAME_OVER" and event.key == pygame.K_RETURN:
+                self._end_minigame()
     
     def _start_transition(self, callback):
         self.transitioning = True
@@ -204,19 +203,30 @@ class ALaCanecaState(State):
         
         # Salir del minijuego
         self._start_transition(lambda: self.game.state_stack.pop())
+
     
     def update(self, dt):
         self.transition.update(dt)
-        
+
         if not self.transition.active and self.transitioning:
             self.transitioning = False
             self.can_handle_input = True
-        
+
         # Actualizar tiempo
         if self.game_state == "PLAYING":
             tiempo_actual = (pygame.time.get_ticks() - self.inicio) / 1000
             tiempo_restante = max(0, self.tiempo_limite - tiempo_actual)
-            
+
+            # Lógica del bot
+            if self.player2_is_bot:
+                tiempo = pygame.time.get_ticks()
+                if (
+                    tiempo - self.bot_last_action_time
+                    > self.bot_interval + random.randint(0, 10) * 100
+                ):
+                    self.simular_bot_jugador2()
+                    self.bot_last_action_time = tiempo
+
             if tiempo_restante <= 0:
                 self.game_state = "GAME_OVER"
     
@@ -231,18 +241,31 @@ class ALaCanecaState(State):
         for tipo, pos in self.canecas_j1.items():
             if tipo == "negra":
                 screen.blit(self.canecaN, pos)
+                text_a = self.font_small.render("A", True, (255, 255, 255))  # Letra blanca
+                screen.blit(text_a, (pos[0] + 43, pos[1] + 50)) 
             elif tipo == "blanca":
                 screen.blit(self.canecaB, pos)
+                text_a = self.font_small.render("W", True, (0, 0, 0))  # Letra negra
+                screen.blit(text_a, (pos[0] + 43, pos[1] + 50)) 
             elif tipo == "verde":
                 screen.blit(self.canecaV, pos)
+                text_a = self.font_small.render("D", True, (255, 255, 255))  # Letra blanca
+                screen.blit(text_a, (pos[0] + 43, pos[1] + 50)) 
+               
         
         for tipo, pos in self.canecas_j2.items():
             if tipo == "negra":
                 screen.blit(self.canecaN, pos)
+                text_a = self.font_small.render("←", True, (255, 255, 255))  # Letra blanca
+                screen.blit(text_a, (pos[0] + 43, pos[1] + 50)) 
             elif tipo == "blanca":
                 screen.blit(self.canecaB, pos)
+                text_a = self.font_small.render("↑", True, (0, 0, 0))  # Letra negra
+                screen.blit(text_a, (pos[0] + 43, pos[1] + 50)) 
             elif tipo == "verde":
                 screen.blit(self.canecaV, pos)
+                text_a = self.font_small.render("→", True, (255, 255, 255))  # Letra blanca
+                screen.blit(text_a, (pos[0] + 43, pos[1] + 50)) 
         
         # Dibujar basura actual
         screen.blit(self.imagenes[self.basura_j1], (SCREEN_WIDTH // 4 - 40, 200))
