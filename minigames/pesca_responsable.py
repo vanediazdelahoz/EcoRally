@@ -26,7 +26,7 @@ class PescaResponsableState(State):
         self.font_small = load_font("assets/fonts/PublicPixel.ttf", 16)
 
         # Obtener nombres de personajes
-        character_names = ["Rosalba", "Icm", "Sofia", "Luis"]
+        character_names = ["Rosalba", "Tinú", "Sofia", "Luis"]
         self.player1_name = character_names[config.characters[0]]
         self.player2_name = (
             character_names[config.characters[1]]
