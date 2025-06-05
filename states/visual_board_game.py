@@ -6,7 +6,7 @@ import os
 from core.config import config
 from core.state import State
 from core.settings import SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, GREEN, get_coordinate
-from core.utils import load_font, get_character
+from core.utils import load_font, get_character, load_image
 from core.background_manager import BackgroundManager
 from core.effects import TransitionEffect
 
@@ -33,6 +33,18 @@ class BoardGameView(State):
         except Exception as e:
             print("Error cargando el mapa:", e)
             self.bg_image = None
+        
+        try:
+            self.OpenR_image = load_image("assets/CosasDelMapa/ReciclajeAbierto/reciclajeAbierto.png", scale=0.4)
+        except Exception as e:
+            print("Error cargando el punto de reciclaje abierto:", e)
+            self.OpenR_image = None
+        
+        try:
+            self.CloseR_image = load_image("assets/CosasDelMapa/ReciclajeCerrado/ReciclajeCerrado.png", scale=0.6)
+        except Exception as e:
+            print("Error cargando el punto de reciclaje cerrado:", e)
+            self.CloseR_image = None
 
         # Efecto de transición
         self.transition = TransitionEffect(0.15)
@@ -243,19 +255,16 @@ class BoardGameView(State):
 
             # Redimensionar y voltear frames para player 2
             self.player2_frames = [
-                pygame.transform.flip(
-                    pygame.transform.scale(
-                        frame,
-                        (
-                            int(frame.get_width() * scale_factor),
-                            int(frame.get_height() * scale_factor),
-                        ),
+                pygame.transform.scale(
+                    frame,
+                    (
+                        int(frame.get_width() * scale_factor),
+                        int(frame.get_height() * scale_factor),
                     ),
-                    True,
-                    False,
                 )
                 for frame in self.player2_frames
             ]
+
 
         except Exception as e:
             print(f"Error cargando personajes: {e}")
@@ -590,7 +599,7 @@ class BoardGameView(State):
             (player_data["move_to"][0] - player_data["move_from"][0]) ** 2
             + (player_data["move_to"][1] - player_data["move_from"][1]) ** 2
         ) ** 0.5
-        player_data["move_steps_total"] = max(int(distancia / 3), 20)
+        player_data["move_steps_total"] = max(int(distancia / 1), 20)
         player_data["move_step"] = 0
         player_data["moving"] = True
 
@@ -1105,9 +1114,13 @@ class BoardGameView(State):
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 if self.game_state == "GAME_OVER":
-                    self._start_transition(lambda: self.game.state_stack.pop())
+                    self.game.state_stack.pop(-2)
+                    self.game.state_stack.pop(-2)
+                    self.game.state_stack.pop(-1)
                 else:
-                    self._start_transition(lambda: self.game.state_stack.pop())
+                    self.game.state_stack.pop(-2)
+                    self.game.state_stack.pop(-2)
+                    self.game.state_stack.pop(-1)
 
             elif event.key == pygame.K_RETURN:
                 # DADOS INICIALES
@@ -1253,40 +1266,47 @@ class BoardGameView(State):
         if self.bg_image:
             screen.blit(self.bg_image, (0, 0))
 
-        # Dibujar indicadores de puntos de reciclaje
+        render_items = []
+
+            # Dibujar imagen# Añadir puntos de reciclaje
         for point in self.recycling_points:
             pos = self.casillas[point.id]
-            if point.timeout == 0:
-                pygame.draw.circle(screen, GREEN, pos, 8)
-                pygame.draw.circle(screen, WHITE, pos, 8, 2)
-            else:
-                pygame.draw.circle(screen, (100, 100, 100), pos, 6)
+            icon = self.OpenR_image if point.timeout == 0 else self.CloseR_image
 
-        # Dibujar jugadores CON ANIMACIÓN
+            icon_width = icon.get_width()
+            icon_height = icon.get_height()
+
+            # Aplicar desplazamiento personalizado
+            offset_pos = (pos[0] + icon_width/3, pos[1] - icon_height / 3)
+
+            icon_rect = icon.get_rect(center=offset_pos)
+            render_items.append((offset_pos[1], icon, icon_rect))  # usar Y desplazado para z-order
+
         players_to_draw = [
             (1, self.player1_data, self.player1_frames),
             (2, self.player2_data, self.player2_frames),
         ]
-        players_to_draw.sort(key=lambda x: x[1]["pos_actual"][1])
 
         for player_id, player_data, frames in players_to_draw:
             if player_data["moving"]:
-                frame_index = player_data["anim_frame"] // 8
-                if frame_index >= len(frames):
-                    frame_index = 0
-                current_frame = frames[frame_index]
+                walk_frames = frames[1:]  # Omitir el frame 0 (idle)
+                frame_index = (player_data["anim_frame"] // 8) % len(walk_frames)
+                current_frame = walk_frames[frame_index]
 
-                if player_data["move_from"] and player_data["move_to"]:
-                    if player_data["move_from"][0] > player_data["move_to"][0]:
-                        if player_id == 1:
-                            current_frame = pygame.transform.flip(
-                                current_frame, True, False
-                            )
+                if player_data["move_from"][0] > player_data["move_to"][0]:
+                    current_frame = pygame.transform.flip(current_frame, True, False)
             else:
                 current_frame = frames[0]
 
             char_rect = current_frame.get_rect(center=player_data["pos_actual"])
-            screen.blit(current_frame, char_rect)
+            render_items.append((player_data["pos_actual"][1], current_frame, char_rect))
+
+        # Ordenar por Y e imprimir todo
+        render_items.sort(key=lambda x: x[0])
+        for _, image, rect in render_items:
+            screen.blit(image, rect)
+        icon_rect = icon.get_rect(center=offset_pos)
+        screen.blit(icon, icon_rect)
 
         # === DIBUJAR DADOS Y MENSAJES ===
         has_center_message = bool(self.center_message)
