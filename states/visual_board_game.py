@@ -77,7 +77,7 @@ class BoardGameView(State):
         )
 
         # Obtener nombres de personajes
-        character_names = ["Rosalba", "Icm", "Sofia", "Luis"]
+        character_names = ["Rosalba", "Tinú", "Sofia", "Luis"]
         self.player1_name = character_names[config.characters[0]]
         self.player2_name = (
             character_names[config.characters[1]]
@@ -947,8 +947,11 @@ class BoardGameView(State):
         if player1_score > player2_score:
             self.player1.collect_trash(10)
             self.player2.collect_trash(3)
-        else:
+        elif player2_score > player1_score:
             self.player1.collect_trash(3)
+            self.player2.collect_trash(10)
+        else:
+            self.player1.collect_trash(10)
             self.player2.collect_trash(10)
 
         # Calcular cambios TOTALES de la ronda
@@ -1281,7 +1284,7 @@ class BoardGameView(State):
             offset_pos = (pos[0] + icon_width/3, pos[1] - icon_height / 3)
 
             icon_rect = icon.get_rect(center=offset_pos)
-            render_items.append((offset_pos[1], icon, icon_rect))  # usar Y desplazado para z-order
+            render_items.append((icon_rect.bottom, icon, icon_rect))  # usar Y desplazado para z-order
 
         players_to_draw = [
             (1, self.player1_data, self.player1_frames),
@@ -1300,14 +1303,13 @@ class BoardGameView(State):
                 current_frame = frames[0]
 
             char_rect = current_frame.get_rect(center=player_data["pos_actual"])
-            render_items.append((player_data["pos_actual"][1], current_frame, char_rect))
+            render_items.append((char_rect.bottom, current_frame, char_rect))
 
         # Ordenar por Y e imprimir todo
         render_items.sort(key=lambda x: x[0])
         for _, image, rect in render_items:
             screen.blit(image, rect)
-        icon_rect = icon.get_rect(center=offset_pos)
-        screen.blit(icon, icon_rect)
+
 
         # === DIBUJAR DADOS Y MENSAJES ===
         has_center_message = bool(self.center_message)
