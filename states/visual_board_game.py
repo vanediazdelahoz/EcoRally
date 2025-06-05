@@ -12,7 +12,7 @@ from core.settings import (
     WHITE,
     LIGHT_GRAY,
 )
-from core.utils import load_font, get_character
+from core.utils import load_font, get_character, load_image
 
 
 class BoardGameView(State):
@@ -25,6 +25,18 @@ class BoardGameView(State):
         self.font_ascii = load_font("assets/fonts/mc-ten-lowercase-alt.ttf", 25)
         self.casillas = get_coordinate(SCREEN_WIDTH, SCREEN_HEIGHT)
 
+        try:
+            self.OpenR_image = load_image("assets/CosasDelMapa/ReciclajeAbierto/reciclajeAbierto.png", scale=0.4)
+        except Exception as e:
+            print("Error cargando el punto de reciclaje abierto:", e)
+            self.OpenR_image = None
+        
+        try:
+            self.CloseR_image = load_image("assets/CosasDelMapa/ReciclajeCerrado/ReciclajeCerrado.png", scale=0.6)
+        except Exception as e:
+            print("Error cargando el punto de reciclaje cerrado:", e)
+            self.CloseR_image = None
+        
         try:
             self.bg_image = pygame.image.load("assets/mapa/Mapa.png").convert_alpha()
             self.bg_image = pygame.transform.scale(
@@ -86,6 +98,8 @@ class BoardGameView(State):
                 "move_to": None,
                 "move_step": 0,
                 "move_steps_total": 0,
+                "cantidad_de_basura": 0,
+                "cantidad_de_medallas": 0,
             }
         )
 
@@ -102,6 +116,8 @@ class BoardGameView(State):
                 "move_to": None,
                 "move_step": 0,
                 "move_steps_total": 0,
+                "cantidad_de_basura": 0,
+                "cantidad_de_medallas": 0,
             }
         )
 
@@ -113,6 +129,7 @@ class BoardGameView(State):
         ]
 
         # Variables para animar el dado
+        self.turno = [0, 1, 2]  # Jugadores que están en turno
         self.dice_rolling = False
         self.dice_start_time = 0
         self.dice_duration = 1500  # ms, duración total de la animación
@@ -122,6 +139,19 @@ class BoardGameView(State):
         self.final_dice_value = None
         self.dice_result_display_time = 1000  # ms
         self.dice_result_time = 0
+
+        self.puntodereciclaje = {}
+
+        #EJEMPLO DE PUNTOS DE RECICLAJE
+        self.set_puntos_de_reciclaje([(2, True), (4, False), (13, True)])
+
+
+    def set_puntos_de_reciclaje(self, lista_de_casas):
+            self.puntodereciclaje = {idx: estado for idx, estado in lista_de_casas}
+
+    def toggle_luces_en_casilla(self, idx):
+        if idx in self.puntodereciclaje:
+            self.puntodereciclaje[idx] = not self.puntodereciclaje[idx]
 
     def start_dice_roll(self):
         if not self.dice_rolling:
@@ -238,6 +268,14 @@ class BoardGameView(State):
         self.screen = screen
         if self.bg_image:
             screen.blit(self.bg_image, (0, 0))
+        
+        for idx, luces_encendidas in self.puntodereciclaje.items():
+            pos = self.casillas[idx]  # Obtener coordenadas reales
+            casa_img = self.OpenR_image if luces_encendidas else self.CloseR_image
+            if casa_img:
+                # Aplicar desplazamiento +10 en x y -10 en y
+                offset_pos = (pos[0] + SCREEN_WIDTH/30, pos[1] - SCREEN_HEIGHT/12)
+                screen.blit(casa_img, offset_pos)
 
         # Ordena los jugadores por su coordenada Y para dibujar al más arriba primero
         players_sorted = sorted(self.players, key=lambda p: p["pos_actual"][1])
