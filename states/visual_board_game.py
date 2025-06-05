@@ -180,17 +180,17 @@ class BoardGameView(State):
         # === INTEGRACIÓN DEL AGENTE BOT ===
         self.is_bot_mode = config.machine_mode
         self.agent = None
-        
+
         # Cargar el agente si estamos en modo bot
         if self.is_bot_mode:
             self.load_agent()
-            
+
         # Temporizadores para acciones automáticas del bot
         self.bot_timer = 0
         self.bot_action_delay = 0
         self.bot_thinking = False
         self.bot_next_action = None
-        
+
         # Timer específico para el segundo dado del bot
         self.bot_second_dice_timer = 0
         self.bot_second_dice_delay = 0
@@ -202,7 +202,7 @@ class BoardGameView(State):
         """Cargar el agente DynaQ con la política aprendida"""
         model_path = "agent/agent_policy.pkl"
         self.agent = DynaQAgent(train_mode=False)  # Modo juego (no entrenamiento)
-        
+
         if os.path.exists(model_path):
             if self.agent.load_policy(model_path):
                 print("✓ Política del agente cargada correctamente")
@@ -326,13 +326,15 @@ class BoardGameView(State):
 
             self.initial_dice2_rolling = True
             self.center_message = f"Tiro inicial para determinar quién empieza"
-            
+
             if self.is_bot_mode:
                 self.bottom_message = f"{self.player2_name} está tirando su dado..."
                 # Programar acción automática del bot
                 self.schedule_bot_action("stop_initial_dice", random.randint(800, 1500))
             else:
-                self.bottom_message = f"{self.player2_name}, presiona ENTER para tirar tu dado"
+                self.bottom_message = (
+                    f"{self.player2_name}, presiona ENTER para tirar tu dado"
+                )
 
         elif (
             self.initial_dice_phase == 2 and player == 2 and self.initial_dice2_rolling
@@ -358,10 +360,12 @@ class BoardGameView(State):
                 self.turn_message = f"Turno: {self.player2_name}"
                 self.waiting_for_enter = True
                 self.bottom_message = "Presiona ENTER para continuar"
-                
+
                 # Si el bot comienza, programar su acción
                 if self.is_bot_mode:
-                    self.schedule_bot_action("continue_after_message", random.randint(1000, 2000))
+                    self.schedule_bot_action(
+                        "continue_after_message", random.randint(1000, 2000)
+                    )
             else:
                 self.center_message += "Empate. Volviendo a tirar..."
                 self.waiting_for_enter = True
@@ -385,10 +389,12 @@ class BoardGameView(State):
         self.bottom_message = "Presiona ENTER para continuar"
         self.game_state = "TURN_START"
         self.message_timer = pygame.time.get_ticks()
-        
+
         # Si es turno del bot, programar su acción
         if self.is_bot_mode and self.current_player == 2:
-            self.schedule_bot_action("continue_after_message", random.randint(800, 1500))
+            self.schedule_bot_action(
+                "continue_after_message", random.randint(800, 1500)
+            )
 
     def start_dice_roll(self):
         """Iniciar animación de dados - SISTEMA DE DOS DADOS"""
@@ -408,14 +414,14 @@ class BoardGameView(State):
                 self.player1 if self.current_player == 1 else self.player2
             )
             self.turn_message = f"Turno: {current_player_obj.character}"
-            
+
             if self.is_bot_mode and self.current_player == 2:
                 self.bottom_message = f"{self.player2_name} está tirando los dados..."
                 # Programar la detención del primer dado
                 self.schedule_bot_action("stop_first_dice", random.randint(800, 1500))
             else:
                 self.bottom_message = "Presiona ENTER para detener el primer dado"
-                
+
             self.center_message = ""
             self.waiting_for_enter = False
             self.message_timer = pygame.time.get_ticks()
@@ -431,14 +437,14 @@ class BoardGameView(State):
 
         current_player_obj = self.player1 if self.current_player == 1 else self.player2
         self.center_message = f"¡Casilla morada!\n{current_player_obj.character} puede tirar un dado para doble basura"
-        
+
         if self.is_bot_mode and self.current_player == 2:
             self.bottom_message = f"{self.player2_name} está tirando el dado..."
             # Programar la tirada automática del dado morado
             self.schedule_bot_action("stop_purple_dice", random.randint(800, 1500))
         else:
             self.bottom_message = "Presiona ENTER para tirar"
-            
+
         self.waiting_for_enter = False
         self.message_timer = pygame.time.get_ticks()
 
@@ -449,7 +455,9 @@ class BoardGameView(State):
             self.purple_dice_value = random.randint(1, 6)
             bonus_trash = self.purple_dice_value * 2
 
-            current_player_obj = self.player1 if self.current_player == 1 else self.player2
+            current_player_obj = (
+                self.player1 if self.current_player == 1 else self.player2
+            )
             current_player_obj.collect_trash(bonus_trash)
 
             self.center_message = f"¡Casilla morada!\n{current_player_obj.character} ganó {bonus_trash} de basura\n(Dado: {self.purple_dice_value} × 2)"
@@ -457,10 +465,12 @@ class BoardGameView(State):
             self.bottom_message = "Presiona ENTER para continuar"
             self.game_state = "PURPLE_DICE_RESULT"
             self.message_timer = pygame.time.get_ticks()
-            
+
             # Si es el bot, programar continuar
             if self.is_bot_mode and self.current_player == 2:
-                self.schedule_bot_action("continue_after_message", random.randint(1000, 2000))
+                self.schedule_bot_action(
+                    "continue_after_message", random.randint(1000, 2000)
+                )
 
     def stop_first_dice(self):
         """Detener el primer dado y comenzar a rodar el segundo"""
@@ -473,21 +483,25 @@ class BoardGameView(State):
                 self.player1 if self.current_player == 1 else self.player2
             )
             self.turn_message = f"Turno: {current_player_obj.character}"
-            
+
             if self.is_bot_mode and self.current_player == 2:
-                self.bottom_message = f"{self.player2_name} está tirando el segundo dado..."
+                self.bottom_message = (
+                    f"{self.player2_name} está tirando el segundo dado..."
+                )
                 # Para el bot, configurar timer directo para el segundo dado
                 self.bot_second_dice_timer = pygame.time.get_ticks()
                 self.bot_second_dice_delay = random.randint(500, 1000)
             else:
                 self.bottom_message = "Presiona ENTER para detener el segundo dado"
-                
+
             self.message_timer = pygame.time.get_ticks()
 
     def stop_second_dice(self):
         """Detener el segundo dado y calcular el resultado total"""
         if self.dice2_rolling:
-            print(f"Deteniendo segundo dado (jugador: {self.current_player}, bot: {self.is_bot_mode})")
+            print(
+                f"Deteniendo segundo dado (jugador: {self.current_player}, bot: {self.is_bot_mode})"
+            )
             self.dice2_rolling = False
             self.dice_rolling = False
             self.dice2_value = random.randint(1, 6)
@@ -507,13 +521,15 @@ class BoardGameView(State):
 
             self.moves_remaining = self.dice_result
             self.game_state = "DICE_SHOWING_RESULT"
-            
+
             # Resetear timer del bot
             self.bot_second_dice_timer = 0
-            
+
             # Si es el bot, programar continuar
             if self.is_bot_mode and self.current_player == 2:
-                self.schedule_bot_action("continue_after_message", random.randint(1000, 2000))
+                self.schedule_bot_action(
+                    "continue_after_message", random.randint(1000, 2000)
+                )
 
     def update_dice_animation(self, dt):
         """Actualizar animación de dados - TODOS LOS TIPOS"""
@@ -633,19 +649,25 @@ class BoardGameView(State):
                         if len(current_player_obj.position.next_squares) > 1:
                             # Hay bifurcación, mostrar opciones
                             self.choice_options = []
-                            for i, square in enumerate(current_player_obj.position.next_squares):
+                            for i, square in enumerate(
+                                current_player_obj.position.next_squares
+                            ):
                                 self.choice_options.append((i, square.id))
 
-                            self.center_message = (
-                                f"Selecciona el camino:\nPasos restantes: {self.moves_remaining}"
-                            )
+                            self.center_message = f"Selecciona el camino:\nPasos restantes: {self.moves_remaining}"
 
                             if self.is_bot_mode and player_id == 2:
-                                self.bottom_message = f"{self.player2_name} está decidiendo..."
+                                self.bottom_message = (
+                                    f"{self.player2_name} está decidiendo..."
+                                )
                                 # Programar decisión del bot usando el agente
-                                self.schedule_bot_action("bot_make_choice", random.randint(800, 1500))
+                                self.schedule_bot_action(
+                                    "bot_make_choice", random.randint(800, 1500)
+                                )
                             else:
-                                self.bottom_message = "← - Camino izquierdo | → - Camino derecho"
+                                self.bottom_message = (
+                                    "← - Camino izquierdo | → - Camino derecho"
+                                )
 
                             self.waiting_for_enter = False
                             self.game_state = "CHOICE"
@@ -654,10 +676,14 @@ class BoardGameView(State):
                             # No hay bifurcación, continuar movimiento automáticamente
                             if self.is_bot_mode and player_id == 2:
                                 # Bot continúa automáticamente después de un breve delay
-                                self.schedule_bot_action("move_current_player", random.randint(300, 600))
+                                self.schedule_bot_action(
+                                    "move_current_player", random.randint(300, 600)
+                                )
                             else:
                                 # Jugador humano continúa automáticamente después de un breve delay
-                                pygame.time.set_timer(pygame.USEREVENT + 1, 400)  # 400ms delay
+                                pygame.time.set_timer(
+                                    pygame.USEREVENT + 1, 400
+                                )  # 400ms delay
                     else:
                         # Terminó el movimiento completo
                         self.apply_square_effect(current_player_obj)
@@ -724,7 +750,9 @@ class BoardGameView(State):
             self.dice_total_message = ""
             self.game_state = "MOVING"
             if self.moves_remaining > 0:
-                self.bottom_message = f"Moviendo... Pasos restantes: {self.moves_remaining}"
+                self.bottom_message = (
+                    f"Moviendo... Pasos restantes: {self.moves_remaining}"
+                )
 
     def make_choice(self, choice_index):
         """Hacer elección en bifurcación - USANDO LÓGICA DE board_game.py"""
@@ -756,7 +784,9 @@ class BoardGameView(State):
             if self.moves_remaining <= 0:
                 self.apply_square_effect(current_player_obj)
             else:
-                self.bottom_message = f"Pasos restantes: {self.moves_remaining} - ENTER para continuar"
+                self.bottom_message = (
+                    f"Pasos restantes: {self.moves_remaining} - ENTER para continuar"
+                )
                 # Actualizar timer para el auto-movimiento
                 self.message_timer = pygame.time.get_ticks()
 
@@ -764,9 +794,9 @@ class BoardGameView(State):
         """El bot toma una decisión en una bifurcación usando el agente DynaQ"""
         if self.game_state != "CHOICE" or self.current_player != 2:
             return
-            
+
         current_player_obj = self.player2
-        
+
         # Si tenemos un agente cargado, usarlo para tomar la decisión
         if self.agent:
             # Codificar el estado actual para el agente
@@ -776,19 +806,23 @@ class BoardGameView(State):
                 current_player_obj.trash,
                 self.recycling_points,
                 current_player_obj.badges,
-                self.player1.badges
+                self.player1.badges,
             )
-            
+
             # Obtener acciones posibles (índices de las casillas siguientes)
-            possible_actions = list(range(len(current_player_obj.position.next_squares)))
-            
+            possible_actions = list(
+                range(len(current_player_obj.position.next_squares))
+            )
+
             # Obtener acción del agente
             action = self.agent.get_action(state, possible_actions)
-            
+
             # Mostrar decisión del bot
             next_square_id = current_player_obj.position.next_squares[action].id
-            self.bottom_message = f"{self.player2_name} elige el camino hacia la casilla {next_square_id}"
-            
+            self.bottom_message = (
+                f"{self.player2_name} elige el camino hacia la casilla {next_square_id}"
+            )
+
             # Hacer la elección
             self.make_choice(action)
         else:
@@ -810,9 +844,7 @@ class BoardGameView(State):
             self.center_message = f"¡{player.character} cayó en una casilla azul!\n\nCasilla neutral, no pasa nada especial."
         elif square.type == "green":
             trash_gained = new_trash - old_trash
-            self.center_message = (
-                f"¡{player.character} cayó en una casilla verde!\n\nGana {trash_gained} de basura"
-            )
+            self.center_message = f"¡{player.character} cayó en una casilla verde!\n\nGana {trash_gained} de basura"
         elif square.type == "red":
             trash_lost = old_trash - new_trash
             self.center_message = f"¡Oh no! {player.character} cayó en una casilla roja!\n\nPierde {trash_lost} de basura"
@@ -825,10 +857,12 @@ class BoardGameView(State):
         self.bottom_message = "Presiona ENTER para continuar"
         self.game_state = "SQUARE_EFFECT"
         self.message_timer = pygame.time.get_ticks()
-        
+
         # Si es el bot, programar continuar
         if self.is_bot_mode and self.current_player == 2:
-            self.schedule_bot_action("continue_after_message", random.randint(1000, 2000))
+            self.schedule_bot_action(
+                "continue_after_message", random.randint(1000, 2000)
+            )
 
     def end_turn(self):
         """Terminar turno actual - USANDO LÓGICA DE board_game.py"""
@@ -899,8 +933,13 @@ class BoardGameView(State):
     def continue_after_minigame(self, player1_score, player2_score):
         """Continuar después del minijuego - USANDO LÓGICA DE board_game.py"""
         # USAR EL MÉTODO collect_trash DE board_game.py
-        self.player1.collect_trash(player1_score)
-        self.player2.collect_trash(player2_score)
+
+        if player1_score > player2_score:
+            self.player1.collect_trash(10)
+            self.player2.collect_trash(3)
+        else:
+            self.player1.collect_trash(3)
+            self.player2.collect_trash(10)
 
         # Calcular cambios TOTALES de la ronda
         p1_trash_change = (
@@ -1031,15 +1070,17 @@ class BoardGameView(State):
     def execute_bot_action(self):
         """Ejecuta la acción programada del bot"""
         self.bot_thinking = False
-        
+
         print(f"Ejecutando acción del bot: {self.bot_next_action}")
-        
+
         if self.bot_next_action == "stop_initial_dice":
             self.stop_initial_dice(2)
         elif self.bot_next_action == "continue_after_message":
             if self.waiting_for_enter:
                 # Simular presionar ENTER
-                self.handle_event(pygame.event.Event(pygame.KEYDOWN, {'key': pygame.K_RETURN}))
+                self.handle_event(
+                    pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_RETURN})
+                )
         elif self.bot_next_action == "stop_first_dice":
             self.stop_first_dice()
         elif self.bot_next_action == "move_current_player":
@@ -1048,7 +1089,7 @@ class BoardGameView(State):
             self.bot_make_choice()
         elif self.bot_next_action == "stop_purple_dice":
             self.stop_purple_dice()
-            
+
         self.bot_next_action = None
 
     def handle_event(self, event):
@@ -1073,7 +1114,11 @@ class BoardGameView(State):
                 if self.game_state == "INITIAL_ROLL":
                     if self.initial_dice_phase == 1 and self.initial_dice1_rolling:
                         self.stop_initial_dice(1)
-                    elif self.initial_dice_phase == 2 and self.initial_dice2_rolling and not self.is_bot_mode:
+                    elif (
+                        self.initial_dice_phase == 2
+                        and self.initial_dice2_rolling
+                        and not self.is_bot_mode
+                    ):
                         self.stop_initial_dice(2)
                     elif self.initial_dice_phase == 3 and self.waiting_for_enter:
                         if self.current_player is not None:
@@ -1163,15 +1208,21 @@ class BoardGameView(State):
         self.update_player_movement(dt)
 
         # Verificar si hay una acción del bot programada
-        if self.bot_thinking and pygame.time.get_ticks() - self.bot_timer > self.bot_action_delay:
+        if (
+            self.bot_thinking
+            and pygame.time.get_ticks() - self.bot_timer > self.bot_action_delay
+        ):
             self.execute_bot_action()
 
         # Verificar timer específico para el segundo dado del bot
-        if (self.bot_second_dice_timer > 0 and 
-            self.dice2_rolling and 
-            self.is_bot_mode and 
-            self.current_player == 2 and
-            pygame.time.get_ticks() - self.bot_second_dice_timer > self.bot_second_dice_delay):
+        if (
+            self.bot_second_dice_timer > 0
+            and self.dice2_rolling
+            and self.is_bot_mode
+            and self.current_player == 2
+            and pygame.time.get_ticks() - self.bot_second_dice_timer
+            > self.bot_second_dice_delay
+        ):
             print("Bot deteniendo automáticamente el segundo dado")
             self.stop_second_dice()
 
@@ -1184,7 +1235,9 @@ class BoardGameView(State):
                 # Para el bot, usar el sistema automático con delay
                 if self.is_bot_mode and self.current_player == 2:
                     if not self.bot_thinking:
-                        self.schedule_bot_action("move_current_player", random.randint(300, 600))
+                        self.schedule_bot_action(
+                            "move_current_player", random.randint(300, 600)
+                        )
                 else:
                     # Para jugadores humanos, auto-mover cada 0.5 segundos
                     if pygame.time.get_ticks() - self.message_timer > 500:
@@ -1357,7 +1410,10 @@ class BoardGameView(State):
                         ),
                     )
 
-            elif self.game_state == "PURPLE_DICE" or self.game_state == "PURPLE_DICE_RESULT":
+            elif (
+                self.game_state == "PURPLE_DICE"
+                or self.game_state == "PURPLE_DICE_RESULT"
+            ):
                 dice_pos = (SCREEN_WIDTH // 2, dice_y)
                 if self.purple_dice_rolling:
                     dice_img = self.dice_images[self.current_purple_dice_frame]
@@ -1446,11 +1502,13 @@ class BoardGameView(State):
 
         # Dibujar información del juego
         self.draw_game_info(screen)
-        
+
         # Indicador de "pensando" para el bot
         if self.bot_thinking and self.current_player == 2 and self.is_bot_mode:
             thinking_text = self.font_small.render("Pensando...", True, WHITE)
-            thinking_rect = thinking_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 60))
+            thinking_rect = thinking_text.get_rect(
+                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 60)
+            )
             screen.blit(thinking_text, thinking_rect)
 
         # Renderizar transición
@@ -1524,4 +1582,6 @@ class BoardGameView(State):
         screen.blit(p2_text, p2_rect)
 
 
-print("BoardGameView - Integrado completamente con la lógica de board_game.py y el agente DynaQ")
+print(
+    "BoardGameView - Integrado completamente con la lógica de board_game.py y el agente DynaQ"
+)
