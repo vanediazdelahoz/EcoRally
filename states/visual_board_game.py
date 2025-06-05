@@ -19,8 +19,15 @@ class BoardGameView(State):
         super().__init__(game)
         pygame.mouse.set_visible(False)
         
-        # Gestor de fondo con Mapa.png
-        self.background = BackgroundManager("Mapa.png")
+        # Cargar fondo como en la versión antigua
+        try:
+            self.bg_image = pygame.image.load("assets/mapa/Mapa.png").convert_alpha()
+            self.bg_image = pygame.transform.scale(
+                self.bg_image, (SCREEN_WIDTH, SCREEN_HEIGHT)
+            )
+        except Exception as e:
+            print("Error cargando el mapa:", e)
+            self.bg_image = None
         
         # Efecto de transición
         self.transition = TransitionEffect(0.15)
@@ -34,6 +41,7 @@ class BoardGameView(State):
         self.font_title = load_font("assets/fonts/PublicPixel.ttf", 24)
         self.font_message = load_font("assets/fonts/PublicPixel.ttf", 16)
         self.font_small = load_font("assets/fonts/PublicPixel.ttf", 12)
+        self.font_turn = load_font("assets/fonts/PublicPixel.ttf", 18)
         
         # === CONFIGURACIÓN DEL JUEGO ===
         self.rounds = 10
@@ -49,9 +57,14 @@ class BoardGameView(State):
         self.squares = create_board()
         self.recycling_points = setup_recycling_points(self.squares, self.total_recycling_points)
         
+        # Obtener nombres de personajes
+        character_names = ["Rosalba", "Icm", "Sofia", "Luis"]
+        self.player1_name = character_names[config.characters[0]]
+        self.player2_name = character_names[config.characters[1]] if not config.machine_mode else f"Bot {character_names[config.characters[1]]}"
+        
         # Crear jugadores
-        self.player1 = Player("Jugador 1")
-        self.player2 = Player("Bot" if config.machine_mode else "Jugador 2")
+        self.player1 = Player(self.player1_name)
+        self.player2 = Player(self.player2_name)
         self.player1.trash = self.initial_trash
         self.player2.trash = self.initial_trash
         
@@ -59,71 +72,142 @@ class BoardGameView(State):
         self.player1.move_to(self.squares[0])
         self.player2.move_to(self.squares[0])
         
-        # Cargar imágenes de personajes
+        # === TRACKING DE CAMBIOS POR RONDA ===
+        self.round_start_stats = {
+            "player1": {"trash": self.initial_trash, "badges": 0},
+            "player2": {"trash": self.initial_trash, "badges": 0}
+        }
+        
+        # Cargar imágenes de personajes CON FRAMES DE ANIMACIÓN
         self.load_character_images()
         
         # Cargar dados
         self.load_dice_images()
         
         # Estado del juego
-        self.game_state = "INITIAL_ROLL"  # INITIAL_ROLL, PLAYER_TURN, DICE_ROLL, MOVING, CHOICE, MINIGAME, GAME_OVER
-        self.current_player = 1  # 1 o 2
+        self.game_state = "INITIAL_ROLL"  # INITIAL_ROLL, TURN_START, PLAYER_TURN, DICE_ROLL, MOVING, CHOICE, PURPLE_DICE, MINIGAME, SQUARE_EFFECT, GAME_OVER
+        self.current_player = None  # Se determinará con dados iniciales
         self.dice_result = None
         self.moves_remaining = 0
-        self.message = "¡Bienvenidos a EcoRally!"
+        
+        # === SISTEMA DE MENSAJES REORGANIZADO ===
+        self.center_message = "¡Bienvenidos a EcoRally!"  # Mensajes informativos centrales
+        self.bottom_message = ""  # Mensajes instructivos (controles)
+        self.turn_message = ""    # Turno actual (superior izquierda)
+        self.dice_total_message = ""  # Total de dados (centrado)
         self.message_timer = 0
+        self.waiting_for_enter = True  # Flag para controlar cuando esperar ENTER
+        
         self.choice_options = []
         
-        # Animación de dados - AUTOMÁTICA CON ENTER PARA DETENER
+        # === SISTEMA DE DOS DADOS INDIVIDUALES ===
         self.dice_rolling = False
         self.dice_start_time = 0
-        self.dice_auto_duration = 3000  # 3 segundos de giro automático
         self.dice_roll_interval = 100
         self.dice_last_update = 0
-        self.current_dice_frame = 0
+        
+        # Estado de cada dado
+        self.dice1_rolling = False
+        self.dice2_rolling = False
+        self.dice1_value = None
+        self.dice2_value = None
+        self.current_dice1_frame = 0
+        self.current_dice2_frame = 0
         self.dice_result_display_time = 2000
         self.dice_result_time = 0
-        self.dice_can_stop = False  # Flag para permitir detener con Enter
         
-        # Posiciones visuales de jugadores
-        self.player1_visual_pos = list(self.casillas[0])
-        self.player2_visual_pos = list(self.casillas[0])
-        self.player1_target_pos = list(self.casillas[0])
-        self.player2_target_pos = list(self.casillas[0])
-        self.move_speed = 200  # píxeles por segundo
+        # === SISTEMA DE DADO ÚNICO PARA CASILLAS MORADAS ===
+        self.purple_dice_rolling = False
+        self.purple_dice_value = None
+        self.current_purple_dice_frame = 0
         
-        # Minijuegos disponibles
+        # === SISTEMA DE DADOS INICIALES SECUENCIAL ===
+        self.initial_dice_rolling = False
+        self.initial_dice_phase = 1  # 1 = player1, 2 = player2, 3 = evaluación
+        self.initial_dice1_rolling = False
+        self.initial_dice2_rolling = False
+        self.initial_dice1_value = None
+        self.initial_dice2_value = None
+        self.current_initial_dice1_frame = 0
+        self.current_initial_dice2_frame = 0
+        self.initial_dice_attempts = 0
+        
+        # === SISTEMA DE MOVIMIENTO ANIMADO (RESTAURADO) ===
+        self.player1_data = {
+            "pos_idx": 0,
+            "pos_actual": list(self.casillas[0]),
+            "anim_frame": 0,
+            "moving": False,
+            "move_from": None,
+            "move_to": None,
+            "move_step": 0,
+            "move_steps_total": 0,
+            "target_idx": 0  # Índice objetivo para el movimiento
+        }
+        
+        self.player2_data = {
+            "pos_idx": 0,  # Ambos jugadores deben empezar en la casilla 0
+            "pos_actual": list(self.casillas[0]),
+            "anim_frame": 0,
+            "moving": False,
+            "move_from": None,
+            "move_to": None,
+            "move_step": 0,
+            "move_steps_total": 0,
+            "target_idx": 0  # Índice objetivo para el movimiento
+        }
+        
+        # Minijuegos disponibles y control de selección
         self.available_minigames = ["a_la_caneca", "cielo_en_crisis", "pesca_responsable"]
         self.selected_minigame = None
+        self.last_minigame = None  # Para evitar repeticiones
         
-        # Determinar quién empieza
-        self.determine_starting_player()
+        # Determinar quién empieza con dados iniciales
+        self.start_initial_dice_roll()
     
     def load_character_images(self):
-        """Cargar imágenes de personajes seleccionados"""
+        """Cargar imágenes de personajes seleccionados CON FRAMES DE ANIMACIÓN"""
         try:
             # Cargar personajes según selección
             character_paths = get_character(4)
             
-            # Player 1
+            # Player 1 - Cargar todos los frames
             char1_path = character_paths[config.characters[0]]
-            self.player1_img = pygame.image.load(char1_path).convert_alpha()
-            self.player1_img = pygame.transform.scale(self.player1_img, (40, 60))
+            self.player1_frames = get_character(config.characters[0])
             
-            # Player 2
+            # Redimensionar frames
+            scale_factor = 0.8
+            self.player1_frames = [
+                pygame.transform.scale(frame, 
+                    (int(frame.get_width() * scale_factor), 
+                     int(frame.get_height() * scale_factor)))
+                for frame in self.player1_frames
+            ]
+            
+            # Player 2 - Cargar todos los frames
             char2_path = character_paths[config.characters[1]]
-            self.player2_img = pygame.image.load(char2_path).convert_alpha()
-            self.player2_img = pygame.transform.scale(self.player2_img, (40, 60))
-            # Voltear player 2
-            self.player2_img = pygame.transform.flip(self.player2_img, True, False)
+            self.player2_frames = get_character(config.characters[1])
+            
+            # Redimensionar y voltear frames para player 2
+            self.player2_frames = [
+                pygame.transform.flip(
+                    pygame.transform.scale(frame, 
+                        (int(frame.get_width() * scale_factor), 
+                         int(frame.get_height() * scale_factor))), 
+                    True, False)
+                for frame in self.player2_frames
+            ]
             
         except Exception as e:
             print(f"Error cargando personajes: {e}")
             # Crear rectángulos como fallback
-            self.player1_img = pygame.Surface((40, 60))
-            self.player1_img.fill((0, 255, 0))
-            self.player2_img = pygame.Surface((40, 60))
-            self.player2_img.fill((255, 0, 0))
+            self.player1_frames = [pygame.Surface((40, 60)) for _ in range(4)]
+            for frame in self.player1_frames:
+                frame.fill((0, 255, 0))
+            
+            self.player2_frames = [pygame.Surface((40, 60)) for _ in range(4)]
+            for frame in self.player2_frames:
+                frame.fill((255, 0, 0))
     
     def load_dice_images(self):
         """Cargar imágenes de dados"""
@@ -147,98 +231,313 @@ class BoardGameView(State):
                 surf.blit(text, text_rect)
                 self.dice_images.append(surf)
     
-    def determine_starting_player(self):
-        """Determinar quién empieza con dados iniciales"""
-        dice1 = random.randint(1, 6)
-        dice2 = random.randint(1, 6)
+    def start_initial_dice_roll(self):
+        """Iniciar dados iniciales SECUENCIAL para determinar quién empieza"""
+        # Asegurar que ambos jugadores estén en la casilla inicial
+        self.player1.move_to(self.squares[0])
+        self.player2.move_to(self.squares[0])
+        self.player1_data["pos_idx"] = 0
+        self.player1_data["pos_actual"] = list(self.casillas[0])
+        self.player2_data["pos_idx"] = 0
+        self.player2_data["pos_actual"] = list(self.casillas[0])
         
-        self.message = f"Tiro inicial — {self.player1.character}: {dice1} | {self.player2.character}: {dice2}"
+        self.initial_dice_rolling = True
+        self.initial_dice_phase = 1  # Empezar con player 1
+        self.initial_dice1_rolling = True
+        self.initial_dice2_rolling = False
+        self.initial_dice1_value = None
+        self.initial_dice2_value = None
+        self.current_initial_dice1_frame = 0
+        self.current_initial_dice2_frame = 0
+        self.dice_start_time = pygame.time.get_ticks()
+        self.dice_last_update = self.dice_start_time
+        self.game_state = "INITIAL_ROLL"
         
-        if dice1 > dice2:
-            self.current_player = 1
-            self.message += f"\n{self.player1.character} comienza"
-        elif dice2 > dice1:
-            self.current_player = 2
-            self.message += f"\n{self.player2.character} comienza"
-        else:
-            self.message += "\nEmpate. Se lanzan los dados de nuevo"
-            # En caso de empate, volver a tirar (simplificado: elegir aleatoriamente)
-            self.current_player = random.choice([1, 2])
-        
+        self.center_message = f"Tiro inicial para determinar quién empieza"
+        self.bottom_message = f"{self.player1_name}, presiona ENTER para tirar tu dado"
+        self.waiting_for_enter = False
         self.message_timer = pygame.time.get_ticks()
-        self.game_state = "PLAYER_TURN"
+    
+    def stop_initial_dice(self, player):
+        """Detener dado inicial SECUENCIAL"""
+        if self.initial_dice_phase == 1 and player == 1 and self.initial_dice1_rolling:
+            # Player 1 detiene su dado
+            self.initial_dice1_rolling = False
+            self.initial_dice1_value = random.randint(1, 6)
+            self.initial_dice_phase = 2
+            
+            # Ahora es turno del player 2
+            self.initial_dice2_rolling = True
+            self.center_message = f"Tiro inicial para determinar quién empieza"
+            self.bottom_message = f"{self.player2_name}, presiona ENTER para tirar tu dado"
+        
+        elif self.initial_dice_phase == 2 and player == 2 and self.initial_dice2_rolling:
+            # Player 2 detiene su dado
+            self.initial_dice2_rolling = False
+            self.initial_dice2_value = random.randint(1, 6)
+            self.initial_dice_phase = 3
+            self.initial_dice_rolling = False
+            self.initial_dice_attempts += 1
+    # Evaluar resultados SOLO cuando ambos jugadores han tirado (fase 3)
+        if self.initial_dice_phase == 3:
+            # Evaluar resultados - SOLO EN RESUMEN FINAL
+            self.center_message = f"Tiro inicial #{self.initial_dice_attempts}\n{self.player1_name}: {self.initial_dice1_value} | {self.player2_name}: {self.initial_dice2_value}\n\n"
+            
+            if self.initial_dice1_value > self.initial_dice2_value:
+                self.current_player = 1
+                self.center_message += f"{self.player1_name} comienza"
+                self.turn_message = f"Turno: {self.player1_name}"
+                self.waiting_for_enter = True
+                self.bottom_message = "Presiona ENTER para continuar"
+            elif self.initial_dice2_value > self.initial_dice1_value:
+                self.current_player = 2
+                self.center_message += f"{self.player2_name} comienza"
+                self.turn_message = f"Turno: {self.player2_name}"
+                self.waiting_for_enter = True
+                self.bottom_message = "Presiona ENTER para continuar"
+            else:
+                self.center_message += "Empate. Volviendo a tirar..."
+                self.waiting_for_enter = True
+                self.bottom_message = "Presiona ENTER para continuar"
+            
+            self.message_timer = pygame.time.get_ticks()
+    
+    def start_new_round_tracking(self):
+        """Iniciar tracking de una nueva ronda"""
+        self.round_start_stats = {
+            "player1": {"trash": self.player1.trash, "badges": self.player1.badges},
+            "player2": {"trash": self.player2.trash, "badges": self.player2.badges}
+        }
+    
+    def start_turn(self):
+        """Iniciar turno de un jugador con mensaje central"""
+        current_player_obj = self.player1 if self.current_player == 1 else self.player2
+        self.center_message = f"Turno de {current_player_obj.character}"
+        self.turn_message = f"Turno: {current_player_obj.character}"
+        self.waiting_for_enter = True
+        self.bottom_message = "Presiona ENTER para continuar"
+        self.game_state = "TURN_START"
+        self.message_timer = pygame.time.get_ticks()
     
     def start_dice_roll(self):
-        """Iniciar animación de dados - INFINITA HASTA ENTER"""
+        """Iniciar animación de dados - SISTEMA DE DOS DADOS"""
         if not self.dice_rolling:
             self.dice_rolling = True
+            self.dice1_rolling = True
+            self.dice2_rolling = False  # El segundo dado no rueda hasta que se detenga el primero
+            self.dice1_value = None
+            self.dice2_value = None
             self.dice_start_time = pygame.time.get_ticks()
             self.dice_last_update = self.dice_start_time
-            self.current_dice_frame = 0
-            self.dice_can_stop = True
+            self.current_dice1_frame = 0
+            self.current_dice2_frame = 0
             self.game_state = "DICE_ROLL"
         
             current_player_obj = self.player1 if self.current_player == 1 else self.player2
-            self.message = f"Turno de {current_player_obj.character}\nDados girando... Presiona ENTER para detener"
+            self.turn_message = f"Turno: {current_player_obj.character}"
+            self.bottom_message = "Presiona ENTER para detener el primer dado"
+            self.center_message = ""
+            self.waiting_for_enter = False
             self.message_timer = pygame.time.get_ticks()
     
-    def stop_dice_roll(self):
-        """Detener dados y mostrar resultado"""
-        if self.dice_rolling and self.dice_can_stop:
-            self.dice_rolling = False
-            self.dice_can_stop = False
+    def start_purple_dice_roll(self):
+        """Iniciar dado especial para casilla morada"""
+        self.purple_dice_rolling = True
+        self.purple_dice_value = None
+        self.current_purple_dice_frame = 0
+        self.dice_start_time = pygame.time.get_ticks()
+        self.dice_last_update = self.dice_start_time
+        self.game_state = "PURPLE_DICE"
+        
+        current_player_obj = self.player1 if self.current_player == 1 else self.player2
+        self.center_message = f"¡Casilla morada!\n{current_player_obj.character} puede tirar un dado para doble basura"
+        self.bottom_message = "Presiona ENTER para tirar"
+        self.waiting_for_enter = False
+        self.message_timer = pygame.time.get_ticks()
+    
+    def stop_purple_dice(self):
+        """Detener dado morado y aplicar efecto"""
+        if self.purple_dice_rolling:
+            self.purple_dice_rolling = False
+            self.purple_dice_value = random.randint(1, 6)
+            bonus_trash = self.purple_dice_value * 2
+        
+        current_player_obj = self.player1 if self.current_player == 1 else self.player2
+        current_player_obj.collect_trash(bonus_trash)
+        
+        # NO mostrar inventario en el mensaje de casilla morada
+        self.center_message = f"¡Casilla morada!\n{current_player_obj.character} ganó {bonus_trash} de basura\n(Dado: {self.purple_dice_value} × 2)"
+        self.waiting_for_enter = True
+        self.bottom_message = "Presiona ENTER para continuar"
+        self.game_state = "PURPLE_DICE_RESULT"  # Nuevo estado para mantener el dado visible
+        self.message_timer = pygame.time.get_ticks()
+    
+    def stop_first_dice(self):
+        """Detener el primer dado y comenzar a rodar el segundo"""
+        if self.dice1_rolling:
+            self.dice1_rolling = False
+            self.dice1_value = random.randint(1, 6)
+            self.dice2_rolling = True
             
-            dice1 = random.randint(1, 6)
-            dice2 = random.randint(1, 6)
-            self.dice_result = dice1 + dice2
+            current_player_obj = self.player1 if self.current_player == 1 else self.player2
+            self.turn_message = f"Turno: {current_player_obj.character}"
+            self.bottom_message = "Presiona ENTER para detener el segundo dado"
+            self.message_timer = pygame.time.get_ticks()
+    
+    def stop_second_dice(self):
+        """Detener el segundo dado y calcular el resultado total"""
+        if self.dice2_rolling:
+            self.dice2_rolling = False
+            self.dice_rolling = False
+            self.dice2_value = random.randint(1, 6)
+            self.dice_result = self.dice1_value + self.dice2_value
             self.dice_result_time = pygame.time.get_ticks()
             
             current_player_obj = self.player1 if self.current_player == 1 else self.player2
-            self.message = f"Turno de {current_player_obj.character}\nDados: {dice1} y {dice2} → Total {self.dice_result}"
+            self.turn_message = f"Turno: {current_player_obj.character}"
+            self.dice_total_message = f"{self.dice1_value} + {self.dice2_value} = {self.dice_result}"
+            self.bottom_message = "Presiona ENTER para empezar movimiento"
+            self.waiting_for_enter = True  # Cambiar a True para requerir ENTER
             self.message_timer = pygame.time.get_ticks()
             
             self.moves_remaining = self.dice_result
-            self.game_state = "MOVING"
+            self.game_state = "DICE_SHOWING_RESULT"  # Nuevo estado
     
     def update_dice_animation(self, dt):
-        """Actualizar animación de dados - INFINITA HASTA ENTER"""
-        if self.dice_rolling:
-            now = pygame.time.get_ticks()
+        """Actualizar animación de dados - TODOS LOS TIPOS"""
+        now = pygame.time.get_ticks()
+        
+        # Cambiar frame de los dados
+        if now - self.dice_last_update > self.dice_roll_interval:
+            # Dados normales
+            if self.dice1_rolling:
+                self.current_dice1_frame = (self.current_dice1_frame + 1) % 6
+            if self.dice2_rolling:
+                self.current_dice2_frame = (self.current_dice2_frame + 1) % 6
             
-            # Cambiar frame del dado
-            if now - self.dice_last_update > self.dice_roll_interval:
-                self.current_dice_frame = (self.current_dice_frame + 1) % 6
-                self.dice_last_update = now
+            # Dados iniciales
+            if self.initial_dice1_rolling:
+                self.current_initial_dice1_frame = (self.current_initial_dice1_frame + 1) % 6
+            if self.initial_dice2_rolling:
+                self.current_initial_dice2_frame = (self.current_initial_dice2_frame + 1) % 6
             
-            # NO terminar automáticamente - esperar a que el jugador presione ENTER
+            # Dado morado
+            if self.purple_dice_rolling:
+                self.current_purple_dice_frame = (self.current_purple_dice_frame + 1) % 6
+            
+            self.dice_last_update = now
+    
+    def interpolar(self, a, b, t):
+        """Función de interpolación para movimiento suave"""
+        return int(a[0] + (b[0] - a[0]) * t), int(a[1] + (b[1] - a[1]) * t)
+    
+    def start_move_to_next_casilla(self, player_id):
+        """Iniciar movimiento a la siguiente casilla CON ANIMACIÓN"""
+        player_data = self.player1_data if player_id == 1 else self.player2_data
+        
+        if player_data["moving"]:
+            return False  # Ya se está moviendo
+        
+        # Calcular siguiente casilla
+        next_idx = player_data["pos_idx"] + 1
+        if next_idx >= len(self.casillas):
+            next_idx = 0  # Volver al inicio si es necesario
+        
+        # Configurar movimiento
+        player_data["move_from"] = list(player_data["pos_actual"])
+        player_data["move_to"] = list(self.casillas[next_idx])
+        player_data["target_idx"] = next_idx
+        
+        # Calcular pasos de animación basados en distancia
+        distancia = (
+            (player_data["move_to"][0] - player_data["move_from"][0]) ** 2
+            + (player_data["move_to"][1] - player_data["move_from"][1]) ** 2
+        ) ** 0.5
+        player_data["move_steps_total"] = max(int(distancia / 3), 20)  # Mínimo 20 pasos
+        player_data["move_step"] = 0
+        player_data["moving"] = True
+        
+        return True
     
     def update_player_movement(self, dt):
-        """Actualizar movimiento visual de jugadores"""
-        # Player 1
-        if self.player1_visual_pos != self.player1_target_pos:
-            dx = self.player1_target_pos[0] - self.player1_visual_pos[0]
-            dy = self.player1_target_pos[1] - self.player1_visual_pos[1]
-            distance = (dx * dx + dy * dy) ** 0.5
+        """Actualizar movimiento visual de jugadores CON ANIMACIÓN"""
+        for player_id, player_data in enumerate([self.player1_data, self.player2_data], 1):
+            if player_data["moving"]:
+                # Calcular progreso de interpolación
+                t = player_data["move_step"] / player_data["move_steps_total"]
             
-            if distance > 2:
-                move_distance = self.move_speed * dt
-                self.player1_visual_pos[0] += (dx / distance) * move_distance
-                self.player1_visual_pos[1] += (dy / distance) * move_distance
-            else:
-                self.player1_visual_pos = list(self.player1_target_pos)
-        
-        # Player 2
-        if self.player2_visual_pos != self.player2_target_pos:
-            dx = self.player2_target_pos[0] - self.player2_visual_pos[0]
-            dy = self.player2_target_pos[1] - self.player2_visual_pos[1]
-            distance = (dx * dx + dy * dy) ** 0.5
+                # Interpolar posición
+                player_data["pos_actual"] = list(self.interpolar(
+                    player_data["move_from"], 
+                    player_data["move_to"], 
+                    t
+                ))
             
-            if distance > 2:
-                move_distance = self.move_speed * dt
-                self.player2_visual_pos[0] += (dx / distance) * move_distance
-                self.player2_visual_pos[1] += (dy / distance) * move_distance
-            else:
-                self.player2_visual_pos = list(self.player2_target_pos)
+                # Actualizar frame de animación
+                player_data["anim_frame"] = (player_data["anim_frame"] + 1) % (
+                    len(self.player1_frames if player_id == 1 else self.player2_frames) * 8
+                )
+            
+                # Avanzar paso
+                player_data["move_step"] += 1
+            
+                # Verificar si terminó el movimiento
+                if player_data["move_step"] > player_data["move_steps_total"]:
+                    player_data["pos_actual"] = list(player_data["move_to"])
+                    player_data["pos_idx"] = player_data["target_idx"]
+                    player_data["moving"] = False
+                    player_data["anim_frame"] = 0
+                
+                    # Actualizar posición lógica del jugador
+                    if player_id == 1:
+                        self.player1.move_to(self.squares[player_data["pos_idx"]])
+                    else:
+                        self.player2.move_to(self.squares[player_data["pos_idx"]])
+                
+                    # === VERIFICAR PUNTO DE RECICLAJE AL PASAR ===
+                    current_player_obj = self.player1 if player_id == 1 else self.player2
+                    current_square = current_player_obj.position
+                
+                    if current_square.recycle:
+                        # Procesar punto de reciclaje pero NO detener completamente el movimiento
+                        self.process_recycling_point_on_pass(current_player_obj, current_square)
+                        # Continuar con el movimiento si quedan pasos
+                
+                    # Reducir movimientos restantes
+                    self.moves_remaining -= 1
+                
+                    # Actualizar mensaje de pasos restantes
+                    if self.moves_remaining > 0:
+                        self.bottom_message = f"Pasos restantes: {self.moves_remaining} - ENTER para continuar"
+                
+                    # Verificar si terminó el movimiento completo
+                    if self.moves_remaining <= 0:
+                        self.apply_square_effect(current_player_obj)
+    
+    def process_recycling_point_on_pass(self, player, square):
+        """Procesar punto de reciclaje cuando el jugador pasa por él (sin detener movimiento)"""
+        if square.timeout == 0:
+            # Punto disponible
+            if player.trash >= 20:
+                old_badges = player.badges
+                player.try_recycle(self.recycle_timeout, silent_mode=True)
+                new_badges = player.badges
+            
+                # Mostrar mensaje temporal pero continuar movimiento
+                self.show_temporary_recycling_message(f"¡{player.character} obtuvo insignia! ({old_badges} → {new_badges})")
+                # Activar punto de reciclaje por 2 rondas (resto de actual + siguiente completa)
+                square.timeout = self.recycle_timeout + 1  # +1 para incluir resto de ronda actual
+        else:
+            self.show_temporary_recycling_message(f"¡{player.character} pasó por punto ocupado! (Se libera en {square.timeout} rondas)")
+
+    def show_temporary_recycling_message(self, message):
+        """Mostrar mensaje temporal de reciclaje sin detener el juego"""
+        # Esto podría ser un mensaje que aparezca brevemente en pantalla
+        # Por ahora, lo agregamos al mensaje de pasos restantes
+        if self.moves_remaining > 0:
+            self.bottom_message = f"{message} | Pasos restantes: {self.moves_remaining}"
+        else:
+            self.bottom_message = message
     
     def move_current_player(self):
         """Mover jugador actual una casilla"""
@@ -253,121 +552,115 @@ class BoardGameView(State):
             for i, square in enumerate(current_player_obj.position.next_squares):
                 self.choice_options.append((i, square.id))
             
-            self.message = f"Selecciona el camino:\n"
-            for i, square_id in self.choice_options:
-                self.message += f"{i} → Casilla {square_id}\n"
+            self.center_message = f"Selecciona el camino:\nPasos restantes: {self.moves_remaining}"
             
-            if self.current_player == 1:
-                self.message += "Presiona A/D para elegir"
-            else:
-                if config.machine_mode:
-                    # Bot elige automáticamente
-                    choice = random.choice(range(len(self.choice_options)))
-                    self.make_choice(choice)
-                    return
-                else:
-                    self.message += "Presiona ←/→ para elegir"
+            # Ambos jugadores usan flechas
+            self.bottom_message = "← - Camino izquierdo | → - Camino derecho"
             
+            self.waiting_for_enter = False
             self.game_state = "CHOICE"
             self.message_timer = pygame.time.get_ticks()
             return
         
-        # Mover a la siguiente casilla
-        if current_player_obj.position.next_squares:
-            next_square = current_player_obj.position.next_squares[0]
-            current_player_obj.move_to(next_square)
-            
-            # Actualizar posición visual objetivo
-            if self.current_player == 1:
-                self.player1_target_pos = list(self.casillas[next_square.id])
-            else:
-                self.player2_target_pos = list(self.casillas[next_square.id])
-            
-            self.moves_remaining -= 1
-            
-            # Verificar si terminó el movimiento
-            if self.moves_remaining <= 0:
-                self.apply_square_effect(current_player_obj)
-                self.end_turn()
+        # Iniciar movimiento animado
+        if self.start_move_to_next_casilla(self.current_player):
+            # Limpiar mensajes durante movimiento
+            self.center_message = ""
+            self.dice_total_message = ""
+            if self.moves_remaining > 0:
+                self.bottom_message = f"Pasos restantes: {self.moves_remaining}"
     
     def make_choice(self, choice_index):
         """Hacer elección en bifurcación"""
         if choice_index < len(self.choice_options):
             current_player_obj = self.player1 if self.current_player == 1 else self.player2
             chosen_square = current_player_obj.position.next_squares[choice_index]
+        
+            # Actualizar posición lógica
             current_player_obj.move_to(chosen_square)
-            
-            # Actualizar posición visual objetivo
-            if self.current_player == 1:
-                self.player1_target_pos = list(self.casillas[chosen_square.id])
-            else:
-                self.player2_target_pos = list(self.casillas[chosen_square.id])
-            
+        
+            # Actualizar posición visual
+            player_data = self.player1_data if self.current_player == 1 else self.player2_data
+            player_data["pos_idx"] = chosen_square.id
+            player_data["pos_actual"] = list(self.casillas[chosen_square.id])
+        
+            # === VERIFICAR PUNTO DE RECICLAJE AL PASAR ===
+            if chosen_square.recycle:
+                # Procesar punto de reciclaje pero continuar movimiento
+                self.process_recycling_point_on_pass(current_player_obj, chosen_square)
+        
             self.moves_remaining -= 1
             self.game_state = "MOVING"
-            
+        
+            # Limpiar mensaje central después de elegir
+            self.center_message = ""
+        
             if self.moves_remaining <= 0:
                 self.apply_square_effect(current_player_obj)
-                self.end_turn()
+            else:
+                self.bottom_message = f"Pasos restantes: {self.moves_remaining} - ENTER para continuar"
     
     def apply_square_effect(self, player):
-        """Aplicar efecto de la casilla usando la lógica exacta de square.py"""
+        """Aplicar efecto de la casilla CON MENSAJES CENTRALES"""
         square = player.position
         
         # Usar el método effect de la casilla
         if square.type == "blue":
-            self.message = "Casilla azul"
+            self.center_message = f"¡{player.character} cayó en una casilla azul!\n\nCasilla neutral, no pasa nada especial."
         elif square.type == "green":
-            self.message = f"Casilla verde: {player.character} gana 3 de basura"
+            self.center_message = f"¡{player.character} cayó en una casilla verde!\n\nGana 3 de basura"
             player.collect_trash(3)
         elif square.type == "red":
-            self.message = f"Oh no… ¡Casilla roja! {player.character} ha perdido 3 de basura."
+            self.center_message = f"¡Oh no! {player.character} cayó en una casilla roja!\n\nPierde 3 de basura"
             player.collect_trash(-3)
         elif square.type == "purple":
-            dice = random.randint(1, 6)
-            dicepurple = dice * 2
-            self.message = f"¡Casilla morada! Dado bonus {dice} → +{dicepurple} de basura"
-            player.collect_trash(dicepurple)
-        
-        # Verificar punto de reciclaje
-        if square.recycle:
-            player.try_recycle(self.recycle_timeout, silent_mode=True)
-            self.message += f"\n¡{player.character} llegó a un Punto de Reciclaje!"
-            if square.timeout == 0:
-                if player.trash >= 20:
-                    self.message += "\n¡Nueva insignia obtenida!"
-                else:
-                    self.message += f"\nNo tiene suficiente basura (necesita 20, tiene {player.trash})"
-            else:
-                self.message += "\nPunto de reciclaje ocupado!"
-        
-        self.message += f"\nInventario — Insignias: {player.badges} | Basura: {player.trash}"
+            # Casilla morada: iniciar dado especial
+            self.start_purple_dice_roll()
+            return  # No terminar turno aún
+    
+        self.waiting_for_enter = True
+        self.bottom_message = "Presiona ENTER para continuar"
+        self.game_state = "SQUARE_EFFECT"
         self.message_timer = pygame.time.get_ticks()
     
     def end_turn(self):
         """Terminar turno actual"""
-        # Reducir timeout de puntos de reciclaje
-        for point in self.recycling_points:
-            if point.timeout > 0:
-                point.timeout -= 1
-        
         # Cambiar jugador
         self.current_player = 2 if self.current_player == 1 else 1
-        
+    
         # Verificar si terminó la ronda
         if self.current_player == 1:  # Volvió al jugador 1, terminó la ronda
+            # Reducir timeout de puntos de reciclaje al final de la ronda
+            points_to_reactivate = []
+            for point in self.recycling_points:
+                if point.timeout > 0:
+                    point.timeout -= 1
+                    if point.timeout == 0:
+                        points_to_reactivate.append(point.id)
+        
+            # Guardar puntos que se reactivarán para mostrar mensaje después
+            self.points_to_reactivate = points_to_reactivate
+        
             self.current_round += 1
-            
+        
             if self.current_round > self.rounds:
                 self.end_game()
             else:
                 self.start_minigame()
         else:
-            self.game_state = "PLAYER_TURN"
+            # Iniciar turno del siguiente jugador
+            self.start_turn()
     
     def start_minigame(self):
-        """Iniciar minijuego aleatorio - SELECCIÓN ALEATORIA"""
-        self.selected_minigame = random.choice(self.available_minigames)
+        """Iniciar minijuego aleatorio - EVITANDO REPETICIONES"""
+        # Filtrar minijuegos disponibles (excluir el último jugado)
+        available_games = [game for game in self.available_minigames if game != self.last_minigame]
+        
+        # Seleccionar uno al azar de los disponibles
+        self.selected_minigame = random.choice(available_games)
+        
+        # Guardar el minijuego seleccionado como el último jugado
+        self.last_minigame = self.selected_minigame
         
         minigame_names = {
             "a_la_caneca": "A La Caneca",
@@ -375,7 +668,9 @@ class BoardGameView(State):
             "pesca_responsable": "Pesca Responsable"
         }
         
-        self.message = f"¡Fin de la ronda {self.current_round - 1}!\nMinijuego: {minigame_names[self.selected_minigame]}\nPresiona ENTER para continuar"
+        self.center_message = f"¡Minijuego: {minigame_names[self.selected_minigame]}!"
+        self.bottom_message = "Presiona ENTER para continuar"
+        self.waiting_for_enter = True
         self.message_timer = pygame.time.get_ticks()
         self.game_state = "MINIGAME"
     
@@ -391,20 +686,95 @@ class BoardGameView(State):
             from minigames.pesca_responsable import PescaResponsableState
             self.game.state_stack.append(PescaResponsableState(self.game))
         
-        # El minijuego se ejecutará y cuando termine, volveremos automáticamente al tablero
-        self.game_state = "PLAYER_TURN"
-        self.message = f"¡Ronda {self.current_round}!"
-        self.message_timer = pygame.time.get_ticks()
+        # Limpiar mensajes
+        self.center_message = ""
+        self.bottom_message = ""
+        self.dice_total_message = ""
     
     def continue_after_minigame(self, player1_score, player2_score):
-        """Continuar después del minijuego - SUMAR BASURA OBTENIDA"""
+        """Continuar después del minijuego - MOSTRAR CAMBIOS TOTALES DE LA RONDA"""
         # Sumar la basura obtenida en el minijuego
         self.player1.collect_trash(player1_score)
         self.player2.collect_trash(player2_score)
         
-        # Continuar con la siguiente ronda
-        self.game_state = "PLAYER_TURN"
-        self.message = f"¡Ronda {self.current_round}!\n{self.player1.character} +{player1_score} basura\n{self.player2.character} +{player2_score} basura"
+        # Calcular cambios TOTALES de la ronda (incluyendo casillas + minijuego)
+        p1_trash_change = self.player1.trash - self.round_start_stats["player1"]["trash"]
+        p1_badges_change = self.player1.badges - self.round_start_stats["player1"]["badges"]
+        p2_trash_change = self.player2.trash - self.round_start_stats["player2"]["trash"]
+        p2_badges_change = self.player2.badges - self.round_start_stats["player2"]["badges"]
+        
+        # Determinar ranking actual
+        if self.player1.badges > self.player2.badges:
+            first_place = f"{self.player1_name} (1°)"
+            second_place = f"{self.player2_name} (2°)"
+        elif self.player2.badges > self.player1.badges:
+            first_place = f"{self.player2_name} (1°)"
+            second_place = f"{self.player1_name} (2°)"
+        else:
+            # Mismo número de insignias, decidir por basura
+            if self.player1.trash > self.player2.trash:
+                first_place = f"{self.player1_name} (1°)"
+                second_place = f"{self.player2_name} (2°)"
+            elif self.player2.trash > self.player1.trash:
+                first_place = f"{self.player2_name} (1°)"
+                second_place = f"{self.player1_name} (2°)"
+            else:
+                first_place = f"{self.player1_name} (Empate)"
+                second_place = f"{self.player2_name} (Empate)"
+        
+        # Mostrar resumen COMPLETO de la ronda
+        summary_lines = [f"¡Fin de la ronda {self.current_round - 1}!", ""]
+        
+        # Cambios del jugador 1
+        p1_changes = []
+        if p1_badges_change != 0:
+            p1_changes.append(f"Insignias: {'+' if p1_badges_change > 0 else ''}{p1_badges_change}")
+        if p1_trash_change != 0:
+            p1_changes.append(f"Basura: {'+' if p1_trash_change > 0 else ''}{p1_trash_change}")
+        
+        if p1_changes:
+            summary_lines.append(f"{self.player1_name}: {' | '.join(p1_changes)}")
+        else:
+            summary_lines.append(f"{self.player1_name}: Sin cambios")
+        
+        # Cambios del jugador 2
+        p2_changes = []
+        if p2_badges_change != 0:
+            p2_changes.append(f"Insignias: {'+' if p2_badges_change > 0 else ''}{p2_badges_change}")
+        if p2_trash_change != 0:
+            p2_changes.append(f"Basura: {'+' if p2_trash_change > 0 else ''}{p2_trash_change}")
+        
+        if p2_changes:
+            summary_lines.append(f"{self.player2_name}: {' | '.join(p2_changes)}")
+        else:
+            summary_lines.append(f"{self.player2_name}: Sin cambios")
+        
+        # Añadir ranking actual
+        summary_lines.extend(["", "Ranking actual:", first_place, second_place])
+        
+        self.center_message = "\n".join(summary_lines)
+        self.bottom_message = "Presiona ENTER para continuar"
+        self.waiting_for_enter = True
+        self.game_state = "ROUND_SUMMARY"
+        self.message_timer = pygame.time.get_ticks()
+    
+    def start_new_round(self):
+        """Iniciar nueva ronda"""
+        # Iniciar tracking de la nueva ronda
+        self.start_new_round_tracking()
+    
+        # Verificar si hay puntos de reciclaje que se reactivaron
+        if hasattr(self, 'points_to_reactivate') and self.points_to_reactivate:
+            points_msg = ", ".join([f"Punto {pid}" for pid in self.points_to_reactivate])
+            self.center_message = f"¡Ronda {self.current_round}!\n\n📍 Puntos de Reciclaje reactivados:\n{points_msg}\n\nAhora están disponibles para ser usados"
+            self.points_to_reactivate = []  # Limpiar lista
+        else:
+            self.center_message = f"¡Ronda {self.current_round}!"
+    
+        self.bottom_message = "Presiona ENTER para continuar"
+        self.waiting_for_enter = True
+        self.dice_total_message = ""
+        self.game_state = "NEW_ROUND"
         self.message_timer = pygame.time.get_ticks()
     
     def end_game(self):
@@ -413,18 +783,22 @@ class BoardGameView(State):
         
         # Determinar ganador usando la lógica exacta de board_game.py
         if self.player1.badges > self.player2.badges:
-            winner = f'{self.player1.character} gana la partida con más insignias que su oponente.'
+            winner = f'{self.player1_name} gana la partida con más insignias que su oponente.'
         elif self.player2.badges > self.player1.badges:
-            winner = f'{self.player2.character} gana la partida con más insignias que su oponente.'
+            winner = f'{self.player2_name} gana la partida con más insignias que su oponente.'
         else:
             if self.player1.trash > self.player2.trash:
-                winner = f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {self.player1.character} gana la partida gracias a su mayor esfuerzo recolectando basura.'
+                winner = f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {self.player1_name} gana la partida gracias a su mayor esfuerzo recolectando basura.'
             elif self.player2.trash > self.player1.trash:
-                winner = f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {self.player2.character} gana la partida gracias a su mayor esfuerzo recolectando basura.'
+                winner = f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {self.player2_name} gana la partida gracias a su mayor esfuerzo recolectando basura.'
             else:
                 winner = "¡Es un empate total! Ambos jugadores tienen las mismas insignias y basura."
         
-        self.message = f"¡Fin del juego!\n\nResultados finales:\n{self.player1.character} — Insignias: {self.player1.badges} | Basura: {self.player1.trash}\n{self.player2.character} — Insignias: {self.player2.badges} | Basura: {self.player2.trash}\n\n{winner}\n\nPresiona ESC para salir"
+        self.center_message = f"¡Fin del juego!\n\nResultados finales:\n{self.player1_name} — Insignias: {self.player1.badges} | Basura: {self.player1.trash}\n{self.player2_name} — Insignias: {self.player2.badges} | Basura: {self.player2.trash}\n\n{winner}"
+        self.bottom_message = "Presiona ESC para salir"
+        self.turn_message = ""
+        self.dice_total_message = ""
+        self.waiting_for_enter = False
         self.message_timer = pygame.time.get_ticks()
     
     def handle_event(self, event):
@@ -439,35 +813,86 @@ class BoardGameView(State):
                     # Confirmar salida durante el juego
                     self._start_transition(lambda: self.game.state_stack.pop())
             
+            elif event.key == pygame.K_RETURN:
+                # DADOS INICIALES: Ambos jugadores usan ENTER secuencialmente
+                if self.game_state == "INITIAL_ROLL":
+                    if self.initial_dice_phase == 1 and self.initial_dice1_rolling:
+                        self.stop_initial_dice(1)  # Player 1 detiene su dado
+                    elif self.initial_dice_phase == 2 and self.initial_dice2_rolling:
+                        self.stop_initial_dice(2)  # Player 2 detiene su dado
+                    elif self.initial_dice_phase == 3 and self.waiting_for_enter:
+                        if self.current_player is not None:
+                            # Empezar el juego
+                            self.start_new_round_tracking()  # Iniciar tracking de la primera ronda
+                            self.start_turn()
+                        else:
+                            # Empate, reiniciar dados
+                            self.start_initial_dice_roll()
+                
+                # ENTER maneja todos los mensajes centrales que requieren confirmación
+                elif self.waiting_for_enter:
+                    if self.game_state == "TURN_START":
+                        self.game_state = "PLAYER_TURN"
+                        self.center_message = ""
+                        self.waiting_for_enter = False
+                    elif self.game_state == "DICE_SHOWING_RESULT":
+                        # Limpiar dados y empezar movimiento
+                        self.dice_total_message = ""
+                        self.dice_result = None
+                        self.game_state = "MOVING"
+                        self.waiting_for_enter = False
+                        self.bottom_message = f"Pasos restantes: {self.moves_remaining} - ENTER para continuar"
+                    elif self.game_state == "SQUARE_EFFECT":
+                        self.end_turn()
+                    elif self.game_state == "PURPLE_DICE_RESULT":
+                        # Limpiar dado morado y continuar
+                        self.purple_dice_value = None
+                        self.end_turn()
+                    elif self.game_state == "RECYCLING_POINT_PASS":
+                        # Continuar después de pasar por punto de reciclaje
+                        if self.moves_remaining <= 0:
+                            self.apply_square_effect(self.player1 if self.current_player == 1 else self.player2)
+                        else:
+                            self.game_state = "MOVING"
+                            self.center_message = ""
+                            self.waiting_for_enter = False
+                            self.bottom_message = f"Pasos restantes: {self.moves_remaining} - ENTER para continuar"
+                    elif self.game_state == "MINIGAME":
+                        self.launch_minigame()
+                    elif self.game_state == "ROUND_SUMMARY":
+                        self.start_new_round()
+                    elif self.game_state == "NEW_ROUND":
+                        self.start_turn()
+                    elif self.game_state == "RECYCLING_MESSAGE":
+                        self.start_turn()
+                
+                # ENTER para otros controles
+                elif self.game_state == "DICE_ROLL":
+                    # SISTEMA DE DOS DADOS: Detener dados uno por uno
+                    if self.dice1_rolling:
+                        self.stop_first_dice()
+                    elif self.dice2_rolling:
+                        self.stop_second_dice()
+                
+                elif self.game_state == "PURPLE_DICE":
+                    if not self.purple_dice_rolling:
+                        self.start_purple_dice_roll()
+                    else:
+                        self.stop_purple_dice()
+                
+                elif self.game_state == "MOVING":
+                    self.move_current_player()
+            
             elif self.game_state == "PLAYER_TURN":
                 # DADOS EMPIEZAN AUTOMÁTICAMENTE
                 self.start_dice_roll()
             
-            elif self.game_state == "DICE_ROLL":
-                if event.key == pygame.K_RETURN and self.dice_can_stop:
-                    # DETENER DADOS CON ENTER
-                    self.stop_dice_roll()
-            
-            elif self.game_state == "MOVING":
-                if event.key == pygame.K_RETURN:
-                    self.move_current_player()
-            
             elif self.game_state == "CHOICE":
-                if self.current_player == 1:
-                    if event.key == pygame.K_a:
-                        self.make_choice(0)
-                    elif event.key == pygame.K_d:
-                        self.make_choice(1 if len(self.choice_options) > 1 else 0)
-                else:
-                    if not config.machine_mode:
-                        if event.key == pygame.K_LEFT:
-                            self.make_choice(0)
-                        elif event.key == pygame.K_RIGHT:
-                            self.make_choice(1 if len(self.choice_options) > 1 else 0)
-            
-            elif self.game_state == "MINIGAME":
-                if event.key == pygame.K_RETURN:
-                    self.launch_minigame()
+                # Ambos jugadores usan flechas
+                if event.key == pygame.K_LEFT:
+                    self.make_choice(0)
+                elif event.key == pygame.K_RIGHT:
+                    self.make_choice(1 if len(self.choice_options) > 1 else 0)
     
     def _start_transition(self, callback):
         self.transitioning = True
@@ -475,7 +900,6 @@ class BoardGameView(State):
         self.transition.start_fade_out(callback)
     
     def update(self, dt):
-        self.background.update(dt)
         self.transition.update(dt)
         
         if not self.transition.active and self.transitioning:
@@ -485,14 +909,16 @@ class BoardGameView(State):
         # Actualizar animación de dados
         self.update_dice_animation(dt)
         
-        # Actualizar movimiento de jugadores
+        # Actualizar movimiento de jugadores CON ANIMACIÓN
         self.update_player_movement(dt)
         
-        # Auto-mover en estado MOVING
+        # Auto-mover en estado MOVING (solo si no hay movimiento en progreso)
         if self.game_state == "MOVING" and self.moves_remaining > 0:
-            # Auto-mover cada 0.5 segundos
-            if pygame.time.get_ticks() - self.message_timer > 500:
-                self.move_current_player()
+            player_data = self.player1_data if self.current_player == 1 else self.player2_data
+            if not player_data["moving"]:
+                # Auto-mover cada 0.5 segundos
+                if pygame.time.get_ticks() - self.message_timer > 500:
+                    self.move_current_player()
         
         # Auto-iniciar dados en PLAYER_TURN después de un breve delay
         if self.game_state == "PLAYER_TURN":
@@ -500,18 +926,11 @@ class BoardGameView(State):
                 self.start_dice_roll()
     
     def render(self, screen):
-        # Renderizar fondo Mapa.png
-        self.background.render(screen)
+        # Renderizar fondo como en la versión antigua
+        if self.bg_image:
+            screen.blit(self.bg_image, (0, 0))
         
-        # Comentar estas líneas ya que el mapa de fondo ya muestra las casillas
-        # # Dibujar puntos de reciclaje
-        # for point in self.recycling_points:
-        #     pos = self.casillas[point.id]
-        #     color = GREEN if point.timeout == 0 else (100, 100, 100)
-        #     pygame.draw.circle(screen, color, pos, 15)
-        #     pygame.draw.circle(screen, WHITE, pos, 15, 2)
-        
-        # Dibujar indicadores sutiles de puntos de reciclaje (opcional)
+        # Dibujar indicadores sutiles de puntos de reciclaje
         for point in self.recycling_points:
             pos = self.casillas[point.id]
             if point.timeout == 0:
@@ -522,30 +941,227 @@ class BoardGameView(State):
                 # Pequeño indicador gris ocupado
                 pygame.draw.circle(screen, (100, 100, 100), pos, 6)
         
-        # Dibujar jugadores
-        p1_rect = self.player1_img.get_rect(center=self.player1_visual_pos)
-        p2_rect = self.player2_img.get_rect(center=self.player2_visual_pos)
-        screen.blit(self.player1_img, p1_rect)
-        screen.blit(self.player2_img, p2_rect)
+        # Dibujar jugadores CON ANIMACIÓN
+        # Ordenar por posición Y para dibujar correctamente
+        players_to_draw = [
+            (1, self.player1_data, self.player1_frames),
+            (2, self.player2_data, self.player2_frames)
+        ]
+        players_to_draw.sort(key=lambda x: x[1]["pos_actual"][1])
         
-        # Dibujar dados
-        if self.dice_rolling or (self.dice_result and pygame.time.get_ticks() - self.dice_result_time < self.dice_result_display_time):
-            dice_img = self.dice_images[self.current_dice_frame if self.dice_rolling else (self.dice_result - 1) % 6]
-            dice_rect = dice_img.get_rect(center=(SCREEN_WIDTH // 2, 100))
-            screen.blit(dice_img, dice_rect)
+        for player_id, player_data, frames in players_to_draw:
+            if player_data["moving"]:
+                # Usar frame de animación
+                frame_index = player_data["anim_frame"] // 8
+                if frame_index >= len(frames):
+                    frame_index = 0
+                current_frame = frames[frame_index]
+                
+                # Detectar dirección de movimiento para voltear sprite
+                if player_data["move_from"] and player_data["move_to"]:
+                    if player_data["move_from"][0] > player_data["move_to"][0]:
+                        # Moviéndose a la izquierda
+                        if player_id == 1:  # Solo voltear player 1, player 2 ya está volteado
+                            current_frame = pygame.transform.flip(current_frame, True, False)
+            else:
+                # Usar frame idle (primer frame)
+                current_frame = frames[0]
+            
+            # Dibujar el personaje
+            char_rect = current_frame.get_rect(center=player_data["pos_actual"])
+            screen.blit(current_frame, char_rect)
+        
+        # === DIBUJAR DADOS MÁS ABAJO PARA NO TAPAR MENSAJES ===
+        
+        # === CALCULAR POSICIONES PARA CENTRAR TODO EL CONJUNTO ===
+        has_center_message = bool(self.center_message)
+        has_dice = (self.dice_rolling or 
+            self.game_state == "INITIAL_ROLL" or 
+            self.game_state == "PURPLE_DICE" or
+            self.game_state == "PURPLE_DICE_RESULT" or
+            self.game_state == "DICE_SHOWING_RESULT" or
+            (self.dice1_value is not None and self.dice2_value is not None and self.game_state in ["DICE_ROLL", "DICE_SHOWING_RESULT"]))
+        has_dice_total = bool(self.dice_total_message)
+        
+        # Calcular altura total del conjunto
+        total_height = 0
+        if has_center_message:
+            lines = self.center_message.split('\n')
+            total_height += len([l for l in lines if l.strip()]) * 25 + 40  # mensaje + padding
+        
+        if has_dice:
+            total_height += 80 + 20  # dados + spacing
+        
+        if has_dice_total:
+            total_height += 30 + 10  # total + spacing
+        
+        # Posición inicial centrada
+        start_y = (SCREEN_HEIGHT - total_height) // 2
+        current_y = start_y
+        
+        # === MENSAJE CENTRAL ===
+        if has_center_message:
+            lines = self.center_message.split('\n')
+            line_height = 25
+            max_width = 0
+            
+            rendered_lines = []
+            for line in lines:
+                if line.strip():
+                    text_surface = self.font_message.render(line, True, WHITE)
+                    rendered_lines.append(text_surface)
+                    max_width = max(max_width, text_surface.get_width())
+        
+            if rendered_lines:
+                box_width = max_width + 40
+                box_height = len(rendered_lines) * line_height + 20
+                box_x = (SCREEN_WIDTH - box_width) // 2
+                
+                # Fondo del mensaje
+                bg_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+                bg_surface.fill((0, 0, 0, 200))
+                screen.blit(bg_surface, (box_x, current_y))
+                
+                # Borde del mensaje
+                pygame.draw.rect(screen, WHITE, (box_x, current_y, box_width, box_height), 2)
+                
+                # Renderizar líneas
+                for i, line_surface in enumerate(rendered_lines):
+                    line_rect = line_surface.get_rect(center=(SCREEN_WIDTH // 2, current_y + 20 + i * line_height))
+                    screen.blit(line_surface, line_rect)
+                
+                current_y += box_height + 20
+        
+        # === DADOS (CENTRADOS CON EL CONJUNTO) ===
+        if has_dice:
+            dice_y = current_y
+            
+            if self.game_state == "INITIAL_ROLL":
+                # Dados iniciales
+                if self.initial_dice_phase == 1:
+                    dice_pos = (SCREEN_WIDTH // 2, dice_y)
+                    if self.initial_dice1_rolling:
+                        dice_img = self.dice_images[self.current_initial_dice1_frame]
+                    else:
+                        dice_img = self.dice_images[(self.initial_dice1_value or 1) - 1]
+                    screen.blit(dice_img, (dice_pos[0] - dice_img.get_width() // 2, dice_pos[1]))
+                    
+                    # Nombre debajo
+                    p1_label = self.font_small.render(self.player1_name, True, WHITE)
+                    screen.blit(p1_label, (dice_pos[0] - p1_label.get_width() // 2, dice_pos[1] + 90))
+                    
+                elif self.initial_dice_phase >= 2:
+                    dice1_pos = (SCREEN_WIDTH // 2 - 100, dice_y)
+                    dice2_pos = (SCREEN_WIDTH // 2 + 100, dice_y)
+                    
+                    dice1_img = self.dice_images[self.initial_dice1_value - 1]
+                    if self.initial_dice2_rolling:
+                        dice2_img = self.dice_images[self.current_initial_dice2_frame]
+                    else:
+                        dice2_img = self.dice_images[(self.initial_dice2_value or 1) - 1]
+                    
+                    screen.blit(dice1_img, dice1_pos)
+                    screen.blit(dice2_img, dice2_pos)
+                    
+                    # Nombres debajo
+                    p1_label = self.font_small.render(self.player1_name, True, WHITE)
+                    p2_label = self.font_small.render(self.player2_name, True, WHITE)
+                    screen.blit(p1_label, (dice1_pos[0] + 40 - p1_label.get_width() // 2, dice1_pos[1] + 90))
+                    screen.blit(p2_label, (dice2_pos[0] + 40 - p2_label.get_width() // 2, dice2_pos[1] + 90))
+        
+            elif self.game_state == "PURPLE_DICE":
+                dice_pos = (SCREEN_WIDTH // 2, dice_y)
+                if self.purple_dice_rolling:
+                    dice_img = self.dice_images[self.current_purple_dice_frame]
+                else:
+                    dice_img = self.dice_images[(self.purple_dice_value or 1) - 1]
+                screen.blit(dice_img, (dice_pos[0] - dice_img.get_width() // 2, dice_pos[1]))
+        
+            else:
+                # Dados normales - CENTRADO PERFECTO CORREGIDO
+                dice_spacing = 120  # Distancia total entre centros de dados
+                dice1_x = SCREEN_WIDTH // 2 - dice_spacing // 2
+                dice2_x = SCREEN_WIDTH // 2 + dice_spacing // 2
+                dice1_pos = (dice1_x - 40, dice_y)  # -40 para centrar la imagen de 80px
+                dice2_pos = (dice2_x - 40, dice_y)   # -40 para centrar la imagen de 80px
+            
+                # Mostrar dados SIEMPRE que tengamos valores o estén rodando
+                if self.dice1_rolling:
+                    dice1_img = self.dice_images[self.current_dice1_frame]
+                elif self.dice1_value is not None:
+                    dice1_img = self.dice_images[self.dice1_value - 1]
+                else:
+                    dice1_img = None
+            
+                if self.dice2_rolling:
+                    dice2_img = self.dice_images[self.current_dice2_frame]
+                elif self.dice2_value is not None:
+                    dice2_img = self.dice_images[self.dice2_value - 1]
+                else:
+                    dice2_img = None
+            
+                # Dibujar primer dado
+                if dice1_img:
+                    screen.blit(dice1_img, dice1_pos)
+            
+                # Símbolo "+" CENTRADO PERFECTAMENTE entre dados
+                if self.dice1_value is not None or self.dice1_rolling:
+                    plus_font = load_font("assets/fonts/PublicPixel.ttf", 36)
+                    plus_text = plus_font.render("+", True, WHITE)
+                    plus_rect = plus_text.get_rect(center=(SCREEN_WIDTH // 2, dice_y + 40))
+                    screen.blit(plus_text, plus_rect)
+            
+                # Dibujar segundo dado
+                if dice2_img:
+                    screen.blit(dice2_img, dice2_pos)
+        
+            current_y += 80 + 20
+        
+        # === TOTAL DE DADOS (DEBAJO DE LOS DADOS) ===
+        if has_dice_total:
+            dice_text = self.font_title.render(self.dice_total_message, True, WHITE)
+            dice_rect = dice_text.get_rect(center=(SCREEN_WIDTH // 2, current_y))
+            
+            # Fondo para el texto
+            bg_rect = pygame.Rect(dice_rect.x - 20, dice_rect.y - 10, dice_rect.width + 40, dice_rect.height + 20)
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 200))
+            screen.blit(bg_surface, bg_rect)
+            pygame.draw.rect(screen, WHITE, bg_rect, 2)
+            screen.blit(dice_text, dice_rect)
+        
+        # === MENSAJE INFERIOR (INSTRUCCIONES) ===
+        if self.bottom_message:
+            bottom_text = self.font_small.render(self.bottom_message, True, WHITE)
+            bottom_rect = bottom_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+            
+            bg_rect = pygame.Rect(bottom_rect.x - 10, bottom_rect.y - 5, bottom_rect.width + 20, bottom_rect.height + 10)
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 150))
+            screen.blit(bg_surface, bg_rect)
+            screen.blit(bottom_text, bottom_rect)
         
         # Dibujar información del juego
         self.draw_game_info(screen)
-        
-        # Dibujar mensaje
-        self.draw_message(screen)
         
         # Renderizar transición
         self.transition.render(screen)
     
     def draw_game_info(self, screen):
         """Dibujar información del juego"""
-        # Ronda actual
+        # === TURNO ACTUAL (SUPERIOR IZQUIERDA) ===
+        if self.turn_message:
+            turn_text = self.font_turn.render(self.turn_message, True, WHITE)
+            turn_rect = turn_text.get_rect(topleft=(20, 20))
+            
+            # Fondo para el texto
+            bg_rect = pygame.Rect(turn_rect.x - 10, turn_rect.y - 5, turn_rect.width + 20, turn_rect.height + 10)
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_surface.fill((0, 100, 0, 150))
+            screen.blit(bg_surface, bg_rect)
+            screen.blit(turn_text, turn_rect)
+        
+        # === RONDA ACTUAL (SUPERIOR DERECHA) ===
         round_text = self.font_title.render(f"RONDA {self.current_round}/{self.rounds}", True, WHITE)
         round_rect = round_text.get_rect(topright=(SCREEN_WIDTH - 20, 20))
         
@@ -556,99 +1172,30 @@ class BoardGameView(State):
         screen.blit(bg_surface, bg_rect)
         screen.blit(round_text, round_rect)
         
-        # Información de jugadores
+        # === INFORMACIÓN DE JUGADORES (SUPERIOR DERECHA, DEBAJO DE RONDA) ===
         y_offset = 70
         
         # Player 1
-        p1_info = f"{self.player1.character}: Insignias {self.player1.badges} | Basura {self.player1.trash}"
+        p1_info = f"{self.player1_name}: Insignias {self.player1.badges} | Basura {self.player1.trash}"
         p1_text = self.font_small.render(p1_info, True, WHITE)
         p1_rect = p1_text.get_rect(topright=(SCREEN_WIDTH - 20, y_offset))
         
         bg_rect = pygame.Rect(p1_rect.x - 10, p1_rect.y - 5, p1_rect.width + 20, p1_rect.height + 10)
         bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
-        bg_surface.fill((0, 100, 0, 150) if self.current_player == 1 else (0, 0, 0, 150))
+        bg_surface.fill((0, 0, 0, 150))
         screen.blit(bg_surface, bg_rect)
         screen.blit(p1_text, p1_rect)
         
         # Player 2
         y_offset += 30
-        p2_info = f"{self.player2.character}: Insignias {self.player2.badges} | Basura {self.player2.trash}"
+        p2_info = f"{self.player2_name}: Insignias {self.player2.badges} | Basura {self.player2.trash}"
         p2_text = self.font_small.render(p2_info, True, WHITE)
         p2_rect = p2_text.get_rect(topright=(SCREEN_WIDTH - 20, y_offset))
         
         bg_rect = pygame.Rect(p2_rect.x - 10, p2_rect.y - 5, p2_rect.width + 20, p2_rect.height + 10)
         bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
-        bg_surface.fill((0, 100, 0, 150) if self.current_player == 2 else (0, 0, 0, 150))
+        bg_surface.fill((0, 0, 0, 150))
         screen.blit(bg_surface, bg_rect)
         screen.blit(p2_text, p2_rect)
-        
-        # Instrucciones según estado
-        instructions = ""
-        if self.game_state == "PLAYER_TURN":
-            instructions = "Dados iniciando automáticamente..."
-        elif self.game_state == "DICE_ROLL":
-            instructions = "Presiona ENTER para detener dados" if self.dice_can_stop else "Dados girando..."
-        elif self.game_state == "MOVING":
-            instructions = f"Movimientos restantes: {self.moves_remaining} - ENTER para mover"
-        elif self.game_state == "CHOICE":
-            if self.current_player == 1:
-                instructions = "A/D para elegir camino"
-            else:
-                instructions = "←/→ para elegir camino" if not config.machine_mode else "Bot eligiendo..."
-        elif self.game_state == "MINIGAME":
-            instructions = "ENTER para iniciar minijuego"
-        elif self.game_state == "GAME_OVER":
-            instructions = "ESC para salir"
-        
-        if instructions:
-            inst_text = self.font_small.render(instructions, True, WHITE)
-            inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
-            
-            bg_rect = pygame.Rect(inst_rect.x - 10, inst_rect.y - 5, inst_rect.width + 20, inst_rect.height + 10)
-            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
-            bg_surface.fill((0, 0, 0, 150))
-            screen.blit(bg_surface, bg_rect)
-            screen.blit(inst_text, inst_rect)
-    
-    def draw_message(self, screen):
-        """Dibujar mensaje principal"""
-        if not self.message:
-            return
-        
-        # Dividir mensaje en líneas
-        lines = self.message.split('\n')
-        
-        # Calcular dimensiones del cuadro de mensaje
-        line_height = 25
-        max_width = 0
-        
-        rendered_lines = []
-        for line in lines:
-            if line.strip():  # Solo renderizar líneas no vacías
-                text_surface = self.font_message.render(line, True, WHITE)
-                rendered_lines.append(text_surface)
-                max_width = max(max_width, text_surface.get_width())
-        
-        if not rendered_lines:
-            return
-        
-        # Crear cuadro de mensaje
-        box_width = max_width + 40
-        box_height = len(rendered_lines) * line_height + 20
-        box_x = (SCREEN_WIDTH - box_width) // 2
-        box_y = 150
-        
-        # Fondo del mensaje
-        bg_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
-        bg_surface.fill((0, 0, 0, 200))
-        screen.blit(bg_surface, (box_x, box_y))
-        
-        # Borde del mensaje
-        pygame.draw.rect(screen, WHITE, (box_x, box_y, box_width, box_height), 2)
-        
-        # Renderizar líneas
-        for i, line_surface in enumerate(rendered_lines):
-            line_rect = line_surface.get_rect(center=(SCREEN_WIDTH // 2, box_y + 20 + i * line_height))
-            screen.blit(line_surface, line_rect)
 
-print("BoardGameView - Juego completo con todas las mejoras solicitadas")
+print("BoardGameView - Corregidos: resumen de ronda completo, puntos de reciclaje al pasar, pasos restantes en elección")

@@ -1,5 +1,7 @@
+# minigames/cielo_en_crisis.py
 import pygame
 import random
+from core.config import config
 from core.state import State
 from core.settings import SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, BLACK
 from core.utils import load_font
@@ -21,6 +23,11 @@ class CieloEnCrisisState(State):
         # Fuentes
         self.font = load_font("assets/fonts/PublicPixel.ttf", 22)
         self.font_small = load_font("assets/fonts/PublicPixel.ttf", 16)
+        
+        # Obtener nombres de personajes
+        character_names = ["Rosalba", "Icm", "Sofia", "Luis"]
+        self.player1_name = character_names[config.characters[0]]
+        self.player2_name = character_names[config.characters[1]] if not config.machine_mode else f"Bot {character_names[config.characters[1]]}"
         
         # Cargar fondo
         try:
@@ -106,7 +113,8 @@ class CieloEnCrisisState(State):
             
             elif self.game_state == "GAME_OVER":
                 if event.key == pygame.K_RETURN:
-                    self._start_transition(lambda: self.game.state_stack.pop())
+                    # Retornar al juego principal con los puntajes
+                    self._end_minigame()
         
         # Generar basura
         if event.type == pygame.USEREVENT + 1:
@@ -123,6 +131,21 @@ class CieloEnCrisisState(State):
         self.transitioning = True
         self.can_handle_input = False
         self.transition.start_fade_out(callback)
+    
+    def _end_minigame(self):
+        """Terminar minijuego y retornar puntajes al juego principal"""
+        # Limpiar temporizadores
+        pygame.time.set_timer(pygame.USEREVENT + 1, 0)
+        pygame.time.set_timer(pygame.USEREVENT + 2, 0)
+        
+        # Obtener referencia al BoardGameView
+        if len(self.game.state_stack) >= 2:
+            board_game = self.game.state_stack[-2]  # El estado anterior
+            if hasattr(board_game, 'continue_after_minigame'):
+                board_game.continue_after_minigame(self.puntaje1, self.puntaje2)
+        
+        # Salir del minijuego
+        self._start_transition(lambda: self.game.state_stack.pop())
     
     def update(self, dt):
         self.transition.update(dt)
@@ -141,6 +164,7 @@ class CieloEnCrisisState(State):
                 # Detener generación de basura
                 pygame.time.set_timer(pygame.USEREVENT + 1, 0)
                 pygame.time.set_timer(pygame.USEREVENT + 2, 0)
+                return
             
             # Mover jugadores
             teclas = pygame.key.get_pressed()
@@ -193,11 +217,13 @@ class CieloEnCrisisState(State):
         screen.blit(self.caneca_img, self.jugador1_pos)
         screen.blit(self.caneca_img, self.jugador2_pos)
         
-        # Dibujar puntajes
-        texto1 = self.font.render(f"Jugador 1: {self.puntaje1}", True, WHITE)
-        texto2 = self.font.render(f"Jugador 2: {self.puntaje2}", True, WHITE)
+        # Dibujar puntajes - USANDO NOMBRES DE PERSONAJES
+        texto1 = self.font.render(f"{self.player1_name}: {self.puntaje1}", True, WHITE)
         screen.blit(texto1, (20, 10))
-        screen.blit(texto2, (SCREEN_WIDTH - 220, 10))
+        
+        # CORREGIDO: Posición del puntaje del jugador 2
+        texto2 = self.font.render(f"{self.player2_name}: {self.puntaje2}", True, WHITE)
+        screen.blit(texto2, (SCREEN_WIDTH - texto2.get_width() - 20, 10))
         
         # Dibujar tiempo
         tiempo_actual = (pygame.time.get_ticks() - self.inicio_tiempo) / 1000
@@ -220,28 +246,52 @@ class CieloEnCrisisState(State):
     def mostrar_overlay_ganador(self, screen):
         """Mostrar overlay con el resultado final"""
         if self.puntaje1 > self.puntaje2:
-            mensaje = "¡Felicidades Jugador 1, ganaste!"
+            mensaje = f"¡Felicidades {self.player1_name}, ganaste!"
         elif self.puntaje2 > self.puntaje1:
-            mensaje = "¡Felicidades Jugador 2, ganaste!"
+            mensaje = f"¡Felicidades {self.player2_name}, ganaste!"
         else:
             mensaje = "¡Empate!"
         
-        cuadro = pygame.Rect(SCREEN_WIDTH // 2 - 250, SCREEN_HEIGHT // 2 - 100, 500, 200)
+        # Calcular tamaño dinámico del cuadro
+        lines = [
+            mensaje,
+            f"{self.player1_name}: {self.puntaje1}   {self.player2_name}: {self.puntaje2}"
+        ]
+        
+        max_width = 0
+        for line in lines:
+            text_surf = self.font.render(line, True, WHITE)
+            max_width = max(max_width, text_surf.get_width())
+        
+        # Cuadro dinámico
+        box_width = max_width + 60
+        box_height = 120
+        cuadro = pygame.Rect(SCREEN_WIDTH // 2 - box_width // 2, SCREEN_HEIGHT // 2 - box_height // 2, box_width, box_height)
+        
         pygame.draw.rect(screen, BLACK, cuadro)
         pygame.draw.rect(screen, WHITE, cuadro, 4)
         
+        # Mensaje principal
         mensaje_surf = self.font.render(mensaje, True, WHITE)
-        mensaje_rect = mensaje_surf.get_rect(center=(cuadro.centerx, cuadro.y + 50))
+        mensaje_rect = mensaje_surf.get_rect(center=(cuadro.centerx, cuadro.y + 30))
         screen.blit(mensaje_surf, mensaje_rect)
         
-        marcador = f"Jugador 1: {self.puntaje1}   Jugador 2: {self.puntaje2}"
+        # Resumen de puntajes
+        marcador = f"{self.player1_name}: {self.puntaje1}   {self.player2_name}: {self.puntaje2}"
         marcador_surf = self.font.render(marcador, True, WHITE)
-        marcador_rect = marcador_surf.get_rect(center=(cuadro.centerx, cuadro.y + 100))
+        marcador_rect = marcador_surf.get_rect(center=(cuadro.centerx, cuadro.y + 70))
         screen.blit(marcador_surf, marcador_rect)
         
+        # Mensaje de continuar en la parte inferior (independiente)
         continuar = "Presiona ENTER para continuar"
         continuar_surf = self.font_small.render(continuar, True, WHITE)
-        continuar_rect = continuar_surf.get_rect(center=(cuadro.centerx, cuadro.y + 150))
+        continuar_rect = continuar_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+        
+        # Fondo para el mensaje inferior
+        bg_rect = pygame.Rect(continuar_rect.x - 10, continuar_rect.y - 5, continuar_rect.width + 20, continuar_rect.height + 10)
+        bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+        bg_surface.fill((0, 0, 0, 150))
+        screen.blit(bg_surface, bg_rect)
         screen.blit(continuar_surf, continuar_rect)
 
-print("Cielo En Crisis - Minijuego integrado como estado")
+print("Cielo En Crisis - Nombres de personajes implementados")

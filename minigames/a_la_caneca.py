@@ -1,5 +1,7 @@
+# minigames/a_la_caneca.py
 import pygame
 import random
+from core.config import config
 from core.state import State
 from core.settings import SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, BLACK
 from core.utils import load_font
@@ -22,6 +24,11 @@ class ALaCanecaState(State):
         self.font = load_font("assets/fonts/PublicPixel.ttf", 24)
         self.font_small = load_font("assets/fonts/PublicPixel.ttf", 16)
         self.font_final = load_font("assets/fonts/PublicPixel.ttf", 32)
+        
+        # Obtener nombres de personajes
+        character_names = ["Rosalba", "Icm", "Sofia", "Luis"]
+        self.player1_name = character_names[config.characters[0]]
+        self.player2_name = character_names[config.characters[1]] if not config.machine_mode else f"Bot {character_names[config.characters[1]]}"
         
         # Cargar fondo
         try:
@@ -56,9 +63,26 @@ class ALaCanecaState(State):
             self.canecaN = pygame.Surface((100, 100))
             self.canecaN.fill((100, 100, 100))
         
-        # Posiciones de canecas
-        self.canecas_j1 = {"negra": (100, 450), "blanca": (250, 450), "verde": (400, 450)}
-        self.canecas_j2 = {"negra": (700, 450), "blanca": (850, 450), "verde": (1000, 450)}
+        # === CONFIGURACIÓN DE POSICIONES DE CANECAS (AJUSTABLE) ===
+        self.canecas_j1_x_offset = 50    # Posición X inicial para canecas J1 (ajustable)
+        self.canecas_j1_spacing = 100    # Espaciado entre canecas J1 (ajustable)
+        self.canecas_j1_y = 450          # Posición Y de canecas J1 (ajustable)
+        
+        self.canecas_j2_x_offset = 500   # Posición X inicial para canecas J2 (ajustable)
+        self.canecas_j2_spacing = 100    # Espaciado entre canecas J2 (ajustable)
+        self.canecas_j2_y = 450          # Posición Y de canecas J2 (ajustable)
+        
+        # Posiciones de canecas calculadas dinámicamente
+        self.canecas_j1 = {
+            "negra": (self.canecas_j1_x_offset, self.canecas_j1_y),
+            "blanca": (self.canecas_j1_x_offset + self.canecas_j1_spacing, self.canecas_j1_y),
+            "verde": (self.canecas_j1_x_offset + self.canecas_j1_spacing * 2, self.canecas_j1_y)
+        }
+        self.canecas_j2 = {
+            "negra": (self.canecas_j2_x_offset, self.canecas_j2_y),
+            "blanca": (self.canecas_j2_x_offset + self.canecas_j2_spacing, self.canecas_j2_y),
+            "verde": (self.canecas_j2_x_offset + self.canecas_j2_spacing * 2, self.canecas_j2_y)
+        }
         
         # Clasificación de basura
         self.clasificacion = {
@@ -120,36 +144,66 @@ class ALaCanecaState(State):
                 correcta_j1 = self.clasificacion[self.basura_j1]
                 correcta_j2 = self.clasificacion[self.basura_j2]
                 
-                # Controles Jugador 1
+                # Controles Jugador 1 - CORREGIDO: No permitir puntos negativos
                 if event.key == pygame.K_w:
-                    self.puntaje1 += 1 if correcta_j1 == "blanca" else -1
+                    if correcta_j1 == "blanca":
+                        self.puntaje1 += 1
+                    else:
+                        self.puntaje1 = max(0, self.puntaje1 - 1)  # No bajar de 0
                     self.nueva_basura(1)
                 elif event.key == pygame.K_a:
-                    self.puntaje1 += 1 if correcta_j1 == "negra" else -1
+                    if correcta_j1 == "negra":
+                        self.puntaje1 += 1
+                    else:
+                        self.puntaje1 = max(0, self.puntaje1 - 1)  # No bajar de 0
                     self.nueva_basura(1)
                 elif event.key == pygame.K_d:
-                    self.puntaje1 += 1 if correcta_j1 == "verde" else -1
+                    if correcta_j1 == "verde":
+                        self.puntaje1 += 1
+                    else:
+                        self.puntaje1 = max(0, self.puntaje1 - 1)  # No bajar de 0
                     self.nueva_basura(1)
                 
-                # Controles Jugador 2
+                # Controles Jugador 2 - CORREGIDO: No permitir puntos negativos
                 elif event.key == pygame.K_UP:
-                    self.puntaje2 += 1 if correcta_j2 == "blanca" else -1
+                    if correcta_j2 == "blanca":
+                        self.puntaje2 += 1
+                    else:
+                        self.puntaje2 = max(0, self.puntaje2 - 1)  # No bajar de 0
                     self.nueva_basura(2)
                 elif event.key == pygame.K_LEFT:
-                    self.puntaje2 += 1 if correcta_j2 == "negra" else -1
+                    if correcta_j2 == "negra":
+                        self.puntaje2 += 1
+                    else:
+                        self.puntaje2 = max(0, self.puntaje2 - 1)  # No bajar de 0
                     self.nueva_basura(2)
                 elif event.key == pygame.K_RIGHT:
-                    self.puntaje2 += 1 if correcta_j2 == "verde" else -1
+                    if correcta_j2 == "verde":
+                        self.puntaje2 += 1
+                    else:
+                        self.puntaje2 = max(0, self.puntaje2 - 1)  # No bajar de 0
                     self.nueva_basura(2)
             
             elif self.game_state == "GAME_OVER":
                 if event.key == pygame.K_RETURN:
-                    self._start_transition(lambda: self.game.state_stack.pop())
+                    # Retornar al juego principal con los puntajes
+                    self._end_minigame()
     
     def _start_transition(self, callback):
         self.transitioning = True
         self.can_handle_input = False
         self.transition.start_fade_out(callback)
+    
+    def _end_minigame(self):
+        """Terminar minijuego y retornar puntajes al juego principal"""
+        # Obtener referencia al BoardGameView
+        if len(self.game.state_stack) >= 2:
+            board_game = self.game.state_stack[-2]  # El estado anterior
+            if hasattr(board_game, 'continue_after_minigame'):
+                board_game.continue_after_minigame(self.puntaje1, self.puntaje2)
+        
+        # Salir del minijuego
+        self._start_transition(lambda: self.game.state_stack.pop())
     
     def update(self, dt):
         self.transition.update(dt)
@@ -201,10 +255,13 @@ class ALaCanecaState(State):
         else:
             tiempo_restante = 0
         
-        # Dibujar puntajes y tiempo
-        screen.blit(self.font.render(f"P1: {self.puntaje1}", True, WHITE), (30, 20))
-        screen.blit(self.font.render(f"P2: {self.puntaje2}", True, WHITE), (SCREEN_WIDTH - 200, 20))
+        # Dibujar puntajes y tiempo - USANDO NOMBRES DE PERSONAJES
+        screen.blit(self.font.render(f"{self.player1_name}: {self.puntaje1}", True, WHITE), (30, 20))
+        # Posición corregida para jugador 2 (no tan a la derecha)
+        p2_text = self.font.render(f"{self.player2_name}: {self.puntaje2}", True, WHITE)
+        screen.blit(p2_text, (SCREEN_WIDTH - p2_text.get_width() - 30, 20))
         
+        # Cronómetro centrado
         pygame.draw.rect(screen, BLACK, (SCREEN_WIDTH // 2 - 40, 15, 80, 35))
         tiempo_txt = self.font.render(f"{int(tiempo_restante)}", True, WHITE)
         screen.blit(tiempo_txt, (SCREEN_WIDTH // 2 - tiempo_txt.get_width() // 2, 20))
@@ -220,28 +277,52 @@ class ALaCanecaState(State):
         """Mostrar overlay con el resultado final"""
         mensaje = ""
         if self.puntaje1 > self.puntaje2:
-            mensaje = "¡Felicidades Jugador 1, ganaste!"
+            mensaje = f"¡Felicidades {self.player1_name}, ganaste!"
         elif self.puntaje2 > self.puntaje1:
-            mensaje = "¡Felicidades Jugador 2, ganaste!"
+            mensaje = f"¡Felicidades {self.player2_name}, ganaste!"
         else:
             mensaje = "¡Empate!"
         
-        cuadro = pygame.Rect(SCREEN_WIDTH // 2 - 250, SCREEN_HEIGHT // 2 - 100, 500, 200)
+        # Calcular tamaño dinámico del cuadro
+        lines = [
+            mensaje,
+            f"{self.player1_name}: {self.puntaje1}   {self.player2_name}: {self.puntaje2}"
+        ]
+        
+        max_width = 0
+        for line in lines:
+            text_surf = self.font.render(line, True, WHITE)
+            max_width = max(max_width, text_surf.get_width())
+        
+        # Cuadro dinámico
+        box_width = max_width + 60
+        box_height = 120
+        cuadro = pygame.Rect(SCREEN_WIDTH // 2 - box_width // 2, SCREEN_HEIGHT // 2 - box_height // 2, box_width, box_height)
+        
         pygame.draw.rect(screen, BLACK, cuadro)
         pygame.draw.rect(screen, WHITE, cuadro, 4)
         
+        # Mensaje principal
         mensaje_surf = self.font.render(mensaje, True, WHITE)
-        mensaje_rect = mensaje_surf.get_rect(center=(cuadro.centerx, cuadro.y + 50))
+        mensaje_rect = mensaje_surf.get_rect(center=(cuadro.centerx, cuadro.y + 30))
         screen.blit(mensaje_surf, mensaje_rect)
         
-        marcador = f"Jugador 1: {self.puntaje1}   Jugador 2: {self.puntaje2}"
-        marcador_surf = self.font.render(marcador, True, WHITE)
-        marcador_rect = marcador_surf.get_rect(center=(cuadro.centerx, cuadro.y + 100))
+        # Resumen de puntajes
+        marcador = f"{self.player1_name}: {self.puntaje1}   {self.player2_name}: {self.puntaje2}"
+        marcador_surf = self.font_small.render(marcador, True, WHITE)
+        marcador_rect = marcador_surf.get_rect(center=(cuadro.centerx, cuadro.y + 70))
         screen.blit(marcador_surf, marcador_rect)
         
+        # Mensaje de continuar en la parte inferior (independiente)
         continuar = "Presiona ENTER para continuar"
         continuar_surf = self.font_small.render(continuar, True, WHITE)
-        continuar_rect = continuar_surf.get_rect(center=(cuadro.centerx, cuadro.y + 150))
+        continuar_rect = continuar_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+        
+        # Fondo para el mensaje inferior
+        bg_rect = pygame.Rect(continuar_rect.x - 10, continuar_rect.y - 5, continuar_rect.width + 20, continuar_rect.height + 10)
+        bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+        bg_surface.fill((0, 0, 0, 150))
+        screen.blit(bg_surface, bg_rect)
         screen.blit(continuar_surf, continuar_rect)
 
-print("A La Caneca - Minijuego integrado como estado")
+print("A La Caneca - Posiciones de canecas configurables y nombres de personajes")
