@@ -27,15 +27,14 @@ class ModeSelection(State):
         self.font_title = load_font("assets/fonts/PublicPixel.ttf", 32)
         self.font_button_main = load_font("assets/fonts/PublicPixel.ttf", 18)
         self.font_button_sub = load_font("assets/fonts/PublicPixel.ttf", 13)
-        self.font_button_selected = load_font("assets/fonts/PublicPixel.ttf", 15)  # Más grande para seleccionado
         
         # === CONFIGURACIÓN DE POSICIONES (AJUSTABLE) ===
-        self.title_y_position = 200   # Posición Y del título (ajustable)
-        self.carteles_y_position = 180  # Posición Y de los carteles (ajustable)
-        self.cartel_width = 530      # Ancho de cada cartel (ajustable)
-        self.cartel_height = 600    # Alto de cada cartel (ajustable)
-        self.carteles_spacing = -30  # Espaciado entre carteles (ajustable)
-        self.text_offset_y = 245     # Offset Y del texto sobre carteles (ajustable)
+        self.title_y_position = 160   # Posición Y del título (ajustable)
+        self.carteles_y_position = 250  # Posición Y de los carteles (ajustable)
+        self.cartel_width = 400      # Ancho de cada cartel (ajustable)
+        self.cartel_height = 400    # Alto de cada cartel (ajustable)
+        self.carteles_spacing = 30 # Espaciado entre carteles (ajustable)
+        self.text_offset_y = 140     # Offset Y del texto sobre carteles (ajustable)
         
         # Título CON SOMBREADO GRIS
         self.title_surface = self._render_text_with_shadow(self.font_title, "SELECCIONAR MODO", WHITE)
@@ -141,24 +140,31 @@ class ModeSelection(State):
         
         # Carteles y texto
         for i, option in enumerate(self.options):
+
             is_selected = (i == self.selected)
             cartel_pos = self.cartel_positions[i]
+
+            # Renderizar cartel modo (espejado si es el segundo)
+            if i == 1:
+                cartel_image = pygame.transform.flip(self.modo_image, True, False)
+            else:
+                cartel_image = self.modo_image
             
             # Renderizar cartel modo
             cartel_rect = pygame.Rect(cartel_pos[0], cartel_pos[1], self.cartel_width, self.cartel_height)
-            screen.blit(self.modo_image, cartel_rect)
+            screen.blit(cartel_image, cartel_rect)
             
             # Texto encima del cartel
             text_center_x = cartel_rect.centerx
             text_y = cartel_rect.top + self.text_offset_y
-            
-            if is_selected:
-                # Texto más grande y con efecto cuando está seleccionado
-                main_text = self._render_text_with_shadow(self.font_button_selected, option["main"], MARRON, (100, 100, 100), 3)
-                sub_text = self._render_text_with_shadow(self.font_button_selected, option["sub"], MARRON, (100, 100, 100), 3)
-            else:
-                main_text = self._render_text_with_shadow(self.font_button_main, option["main"], MARRON)
-                sub_text = self._render_text_with_shadow(self.font_button_sub, option["sub"], MARRON)
+
+            main_color = WHITE if is_selected else MARRON
+            sub_color = WHITE if is_selected else MARRON
+            main_shadown_color = (100, 100, 100) if is_selected else (128, 128, 128)
+
+            main_text = self._render_text_with_shadow(self.font_button_main, option["main"], main_color, main_shadown_color, 3)
+            sub_text = self._render_text_with_shadow(self.font_button_sub, option["sub"], sub_color)
+
 
             # Renderizar texto principal
             main_rect = main_text.get_rect(center=(text_center_x, text_y - 15))

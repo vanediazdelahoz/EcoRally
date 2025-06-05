@@ -60,7 +60,7 @@ class BackgroundManager:
             if new_width < SCREEN_WIDTH or new_height < SCREEN_HEIGHT:
                 # Crear superficie del tamaño de la pantalla
                 full_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-                full_surface.fill((50, 50, 50))  # Color de relleno gris oscuro
+                full_surface.fill((0, 0, 0))  # Color de relleno negro
                 full_surface.blit(scaled_bg, (bg_x, bg_y))
                 
                 # Guardar en el diccionario

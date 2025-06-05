@@ -163,10 +163,7 @@ class MainMenu(State):
             
             # Cambiar estilo cuando está seleccionado
             if is_selected:
-                # Texto más grande y con efecto cuando está seleccionado
-                font_size = 28  # Tamaño más grande (ajustable)
-                selected_font = load_font("assets/fonts/PublicPixel.ttf", font_size)
-                text_surface = self._render_text_with_shadow(selected_font, option, MARRON, (100, 100, 100), 3)
+                text_surface = self._render_text_with_shadow(self.menu_font, option, WHITE, (120, 120, 120))
             else:
                 text_surface = self._render_text_with_shadow(self.menu_font, option, MARRON)
             
