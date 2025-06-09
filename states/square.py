@@ -1,3 +1,5 @@
+# Define las casillas del tablero
+
 import random
 
 class Square:
@@ -19,23 +21,11 @@ class Square:
         self.recycle = True
 
     def effect(self, player, silent_mode=False):
-        # Basado en el tipo de casilla (designado por color) se activa un efecto
-        if self.type == "blue":
-            if not silent_mode:
-                print("Casilla azul")
-        elif self.type == "green":
-            if not silent_mode:
-                print(f"Casilla verde: Ganas 3 de basura")
+        if self.type == "green":
             player.collect_trash(3)
         elif self.type == "red":
-            if not silent_mode:
-                print(f"Oh no… ¡Casilla roja! Has perdido 3 de basura.")
             player.collect_trash(-3)
         elif self.type == "purple":
-            if not silent_mode:
-                print("¡Casilla morada! Lanza el dado bonus:")
             dice = random.randint(1, 6)
             dicepurple = dice * 2
-            if not silent_mode:
-                print(f"Dado bonus {dice} →  +{dicepurple} de basura")
             player.collect_trash(dicepurple)

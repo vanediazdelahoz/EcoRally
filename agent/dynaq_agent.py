@@ -1,7 +1,6 @@
 import random
 from collections import defaultdict
 import pickle
-import os
 
 class DynaQAgent:
     def __init__(self, train_mode=True, alpha=0.15, gamma=0.95, epsilon=0.3, planning_steps=20):

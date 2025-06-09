@@ -1,4 +1,4 @@
-# Clase base para todos los estados
+# Clase base para representar un estado del juego
 
 class State:
     def __init__(self, game):

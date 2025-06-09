@@ -1,4 +1,4 @@
-# Punto de entrada principal
+# Archivo principal de entrada del videojuego
 
 import pygame
 from core.game import Game

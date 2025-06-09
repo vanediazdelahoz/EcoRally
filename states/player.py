@@ -1,4 +1,7 @@
+# Define la clase que representa a cada jugador
+
 class Player:
+
     def __init__(self, character):
         self.character = character
         self.position = None
@@ -18,19 +21,8 @@ class Player:
             self.trash += amount
 
     def try_recycle(self, timeout, silent_mode=False):
-        if not silent_mode:
-            print("¡Has llegado a un Punto de Reciclaje!")
         if self.position.timeout == 0:
             if self.trash >= 20:
                 self.trash = self.trash - 20
                 self.badges += 1
                 self.position.timeout = timeout
-                if not silent_mode:
-                    print("¡Nueva insignia obtenida!")
-            else:
-                if not silent_mode:
-                    print("No acumulas suficiente basura para reciclar...")
-                    print("Necesitas al menos 20 unidades de basura para hacerlo.")
-        else:
-            if not silent_mode:
-                print("Punto de reciclaje ocupado!")

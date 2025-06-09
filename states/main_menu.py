@@ -1,4 +1,5 @@
-# states/main_menu.py
+# Estado de menú principal
+
 import pygame
 from core.state import State
 from core.settings import SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, MARRON
@@ -11,14 +12,11 @@ class MainMenu(State):
         super().__init__(game)
         pygame.mouse.set_visible(False)
         
-        # Gestor de fondo con fondo1.png
         self.background = BackgroundManager()
         
-        # Efecto de transición
         self.transition = TransitionEffect(0.15)
         self.transition.start_fade_in()
         
-        # Control de transición - INICIALIZAR PRIMERO
         self.transitioning = False
         self.can_handle_input = True
         
@@ -31,63 +29,51 @@ class MainMenu(State):
         self.subtitle_font = load_font("assets/fonts/MinecraftStandard.otf", 16)
         self.menu_font = load_font("assets/fonts/PressStart2P-Regular.ttf", 20)
         
-        # === CONFIGURACIÓN DE POSICIONES (AJUSTABLE) ===
-        self.title_x_position = 170  # Posición X del título (ajustable)
-        self.title_y_position = 100  # Posición Y del título (ajustable)
-        self.subtitle_spacing = 8   # Espaciado entre título y subtítulo (ajustable)
+        self.title_x_position = 170
+        self.title_y_position = 100
+        self.subtitle_spacing = 8
         
-        self.cartel_x_position = SCREEN_WIDTH - 700  # Posición X del cartel (ajustable)
-        self.cartel_y_position = 120  # Posición Y del cartel (ajustable)
-        self.cartel_width = 850      # Ancho del cartel (ajustable)
-        self.cartel_height = 750     # Alto del cartel (ajustable)
+        self.cartel_x_position = SCREEN_WIDTH - 700
+        self.cartel_y_position = 120
+        self.cartel_width = 850
+        self.cartel_height = 750
         
-        self.menu_text_offset_y = -20  # Offset Y del texto sobre cada sección del cartel (ajustable)
+        self.menu_text_offset_y = -20
         
-        # Textos CON SOMBREADO GRIS
         self.title_surface = self._render_text_with_shadow(self.title_font, "ECORALLY", WHITE)
         self.subtitle_surface = self._render_text_with_shadow(self.subtitle_font, "¡Recicla y Haz la Diferencia!", WHITE)
         
-        # Posiciones de título y subtítulo (a la izquierda)
         self.title_rect = pygame.Rect(self.title_x_position, self.title_y_position, 
                                      self.title_surface.get_width(), self.title_surface.get_height())
         self.subtitle_rect = pygame.Rect(self.title_x_position, 
                                         self.title_y_position + self.title_surface.get_height() + self.subtitle_spacing,
                                         self.subtitle_surface.get_width(), self.subtitle_surface.get_height())
         
-        # Cargar imagen del cartel RESPETANDO PROPORCIONES
         try:
-            cartel_original = pygame.image.load("assets/images/landscape/cartel.png").convert_alpha()
+            cartel_original = pygame.image.load("assets/images/selection/multi_wooden_signpost.png").convert_alpha()
             
-            # Calcular escala manteniendo proporción
             original_width = cartel_original.get_width()
             original_height = cartel_original.get_height()
             
-            # Calcular escala para que quepa en el tamaño deseado
             scale_x = self.cartel_width / original_width
             scale_y = self.cartel_height / original_height
-            scale = min(scale_x, scale_y)  # Usar la menor para mantener proporción
+            scale = min(scale_x, scale_y)
             
-            # Calcular nuevas dimensiones manteniendo proporción
             new_width = int(original_width * scale)
             new_height = int(original_height * scale)
             
             self.cartel_image = pygame.transform.scale(cartel_original, (new_width, new_height))
             
-            # Actualizar dimensiones reales del cartel
             self.cartel_width = new_width
             self.cartel_height = new_height
             
         except Exception as e:
-            print(f"Error cargando cartel.png: {e}")
-            # Crear rectángulo como fallback
             self.cartel_image = pygame.Surface((self.cartel_width, self.cartel_height))
             self.cartel_image.fill((100, 100, 100))
         
-        # Rectángulo del cartel
         self.cartel_rect = pygame.Rect(self.cartel_x_position, self.cartel_y_position, 
                                       self.cartel_width, self.cartel_height)
         
-        # Calcular posiciones de texto sobre cada sección del cartel (3 secciones)
         section_height = self.cartel_height // 5
         self.menu_positions = []
         for i in range(3):
@@ -95,7 +81,6 @@ class MainMenu(State):
             self.menu_positions.append((self.cartel_rect.centerx, section_center_y))
     
     def _render_text_with_shadow(self, font, text, text_color, shadow_color=(128, 128, 128), shadow_offset=2):
-        """Renderiza texto con sombreado gris"""
         shadow_surface = font.render(text, True, shadow_color)
         text_surface = font.render(text, True, text_color)
         
@@ -132,7 +117,7 @@ class MainMenu(State):
         if selected == "Jugar":
             from states.mode_selection import ModeSelection
             self.game.state_stack.append(ModeSelection(self.game))
-        elif selected == "Información":  # CORREGIDO: Cambiado de "Information" a "Información"
+        elif selected == "Información":
             from states.information import Information
             self.game.state_stack.append(Information(self.game))
         elif selected == "Salir":
@@ -147,21 +132,16 @@ class MainMenu(State):
             self.can_handle_input = True
     
     def render(self, screen):
-        # Renderizar fondo1.png
         self.background.render(screen)
         
-        # Renderizar título y subtítulo (a la izquierda)
         screen.blit(self.title_surface, self.title_rect)
         screen.blit(self.subtitle_surface, self.subtitle_rect)
         
-        # Renderizar cartel (a la derecha)
         screen.blit(self.cartel_image, self.cartel_rect)
         
-        # Renderizar texto de menú sobre cada sección del cartel
         for i, option in enumerate(self.options):
             is_selected = (i == self.selected_option)
             
-            # Cambiar estilo cuando está seleccionado
             if is_selected:
                 text_surface = self._render_text_with_shadow(self.menu_font, option, WHITE, (120, 120, 120))
             else:
@@ -170,5 +150,4 @@ class MainMenu(State):
             text_rect = text_surface.get_rect(center=self.menu_positions[i])
             screen.blit(text_surface, text_rect)
         
-        # Renderizar transición
         self.transition.render(screen)

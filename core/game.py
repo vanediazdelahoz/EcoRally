@@ -1,4 +1,4 @@
-# Loop principal y manejador de estados
+# Clase principal del juego
 
 import pygame
 from core.settings import FPS, SCREEN_WIDTH, SCREEN_HEIGHT
@@ -22,7 +22,7 @@ class Game:
         self.state_stack = []
         self.load_states()
         pygame.mixer.init()
-        pygame.mixer.music.load("./music/musica.wav")
+        pygame.mixer.music.load("./assets/music/yeah_yuh.wav")
         pygame.mixer.music.set_volume(0.5)
         pygame.mixer.music.play(loops=-1)
 
@@ -49,7 +49,7 @@ class Game:
             self.state_stack[-1].handle_event(event)
 
     def update(self):
-        dt = self.clock.get_time() / 1000  # convertir a segundos
+        dt = self.clock.get_time() / 1000
         self.state_stack[-1].update(dt)
 
     def render(self):
@@ -66,7 +66,7 @@ class Game:
 
         scaled_surface = pygame.transform.smoothscale(self.base_surface, (new_width, new_height))
 
-        # 3. Rellenar pantalla de negro (barras si sobra espacio)
+        # 3. Rellenar pantalla de negro
         self.screen.fill((0, 0, 0))
 
         # 4. Centrar la superficie escalada

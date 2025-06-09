@@ -1,6 +1,8 @@
+# Implementa la lógica principal del juego de mesa con tablero, casillas y jugadores
+
 import sys
 import os
-# Agregar el directorio padre al path para poder importar desde agent/
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from states.square import Square
@@ -8,9 +10,8 @@ from states.player import Player
 from agent.dynaq_agent import DynaQAgent
 import random
 
-# CONFIGURACIÓN SIMPLE
-MODO_JUEGO = "humano_vs_agente"  # Opciones: "humano_vs_humano", "humano_vs_agente"
-MOSTRAR_DECISIONES_AGENTE = True  # True = muestra las decisiones del agente
+MODO_JUEGO = "humano_vs_agente"
+MOSTRAR_DECISIONES_AGENTE = True
 
 def create_board():
 
@@ -212,11 +213,9 @@ def setup_recycling_points(squares, total_recycling_points=3, silent_mode=False)
 
 def BoardGame(use_agent=None, train_agent=None, agent=None, silent_mode=False):
     
-    # Usar configuración global si no se pasan parámetros
     if use_agent is None:
         use_agent = (MODO_JUEGO == "humano_vs_agente")
     
-    # train_agent SIEMPRE es False en board_game EXCEPTO cuando se llama desde train_agent.py
     if train_agent is None:
         train_agent = False
     
@@ -225,15 +224,6 @@ def BoardGame(use_agent=None, train_agent=None, agent=None, silent_mode=False):
     recycle_timeout = 2
     initial_trash = 10
 
-    if not silent_mode:
-        print(f"\n{'='*60}")
-        print(f"🎮 EcoRally")
-        print(f"{'='*60}")
-        print(f"Modo: {'Humano vs Agente' if use_agent else 'Humano vs Humano'}")
-        if use_agent:
-            print(f"Agente: {'Entrenando' if train_agent else 'Solo jugando (SIN entrenamiento - epsilon=0)'}")
-        print(f"{'='*60}\n")
-
     # Usar la función para crear el tablero
     squares = create_board()
     
@@ -241,82 +231,47 @@ def BoardGame(use_agent=None, train_agent=None, agent=None, silent_mode=False):
     recycling_points = setup_recycling_points(squares, total_recylcing_points, silent_mode)
 
     # Crear jugadores
-    player1 = Player("Lulo")
-    player2 = Player("Venado")  # Siempre agente si use_agent=True
+    player1 = Player("1")
+    player2 = Player("2")
     player1.trash = initial_trash
     player2.trash = initial_trash
     
     # Configurar agente
     if use_agent:
         if agent is None:
-            # Crear agente en modo SOLO JUEGO (sin entrenamiento)
             game_agent = DynaQAgent(train_mode=train_agent)
             if not train_agent:
-                game_agent.epsilon = 0.0  # SIN EXPLORACIÓN - Solo usa conocimiento aprendido
+                game_agent.epsilon = 0.0
                 
                 # Cargar política entrenada
                 model_path = "agent/agent_policy.pkl"
-                if game_agent.load_policy(model_path):
-                    if not silent_mode:
-                        print("✓ Política del agente cargada correctamente")
-                        print(f"📊 Estados aprendidos: {len(game_agent.Q):,}")
-                        print(f"🧠 Modo: SOLO EXPLOTACIÓN (epsilon = {game_agent.epsilon})")
-                else:
-                    if not silent_mode:
-                        print("⚠️ No se encontró política entrenada")
-                        print("💡 Para entrenar el agente, ejecuta: python agent/train_model.py")
-                        print("🎲 El agente jugará de forma aleatoria")
+                game_agent.load_policy(model_path)
         else:
             game_agent = agent
-            # Configurar epsilon según el modo
             if not train_agent:
                 game_agent.epsilon = 0.0
     else:
         game_agent = None
     
-    # Variables para el entrenamiento del agente
     agent_state = None
     agent_action = None
     
     while True:
         dice1 = random.randint(1, 6)
         dice2 = random.randint(1, 6)
-        if not silent_mode:
-            print(f"\nTiro inicial — {player1.character}: {dice1} | {player2.character}: {dice2}")
-        if dice1 > dice2:
-            if not silent_mode:
-                print(f"{player1.character} comienza")
-            break
-        elif dice2 > dice1:
-            if not silent_mode:
-                print(f"{player2.character} comienza")
+        if dice2 > dice1:
             player1, player2 = player2, player1
             break
-        else:
-            if not silent_mode:
-                print("Empate. Se lanzan los dados de nuevo")
 
-    if not silent_mode:
-        print(f"{player1.character}: Basura: {player1.trash}, Insignias: {player1.badges}")
-        print(f"{player2.character}: Basura: {player2.trash}, Insignias: {player2.badges}")
-
-    # Iniciar en start
     player1.move_to(squares[0])
     player2.move_to(squares[0])
 
-    # Función move_player modificada para entrenamiento
     def move_player(player, timeout, is_agent_turn=False, current_round=1):
         nonlocal agent_state, agent_action
         
         if player.position.next_squares:
             if len(player.position.next_squares) > 1:
-                if not silent_mode:
-                    print("Selecciona el camino:")
-                    for i in range(len(player.position.next_squares)):
-                        print(f"{i} → Casilla {player.position.next_squares[i].id}")
-                
                 if is_agent_turn and game_agent:
-                    # El agente toma la decisión
                     state = game_agent.encode_state(
                         player.position, 
                         rounds - current_round + 1,
@@ -328,31 +283,18 @@ def BoardGame(use_agent=None, train_agent=None, agent=None, silent_mode=False):
                     possible_actions = list(range(len(player.position.next_squares)))
                     action = game_agent.get_action(state, possible_actions)
                     
-                    # Guardar estado y acción para entrenamiento
                     if train_agent:
                         agent_state = state
                         agent_action = action
-                        # Actualizar historial del agente
                         game_agent.last_trash = player.trash
                         game_agent.last_badges = player.badges
                     
-                    if not silent_mode and MOSTRAR_DECISIONES_AGENTE:
-                        print(f"🤖 El agente elige el camino {action}")
-                    
                     camino = action
                 else:
-                    # Jugador humano elige
-                    if not silent_mode:  # Solo pedir input
-                        try:
-                            camino = int(input("Tu elección: "))
-                            if camino not in range(len(player.position.next_squares)):
-                                print("Opción inválida, eligiendo 0")
-                                camino = 0
-                        except ValueError:
-                            print("Entrada inválida, eligiendo 0")
+                    if not silent_mode:
+                        if camino not in range(len(player.position.next_squares)):
                             camino = 0
                     else:
-                        # Elegir aleatoriamente para el oponente
                         camino = random.choice(range(len(player.position.next_squares)))
                     
                 player.move_to(player.position.next_squares[camino])
@@ -363,13 +305,10 @@ def BoardGame(use_agent=None, train_agent=None, agent=None, silent_mode=False):
         if player.position.recycle:
             player.try_recycle(timeout, silent_mode)
         
-        # Si es el agente y estamos entrenando, actualizar después del movimiento
         if is_agent_turn and game_agent and train_agent and agent_state is not None:
-            # Calcular recompensa
             opponent = player1 if player == player2 else player2
             reward = game_agent.calculate_reward(player, opponent, recycling_points)
             
-            # Obtener nuevo estado
             new_state = game_agent.encode_state(
                 player.position, 
                 rounds - current_round + 1,
@@ -379,46 +318,26 @@ def BoardGame(use_agent=None, train_agent=None, agent=None, silent_mode=False):
                 opponent.badges
             )
             
-            # Actualizar Q-learning
             next_possible_actions = list(range(len(player.position.next_squares))) if player.position.next_squares else [0]
             game_agent.update(agent_state, agent_action, new_state, reward, next_possible_actions)
 
     def round(r, player1, player2, timeout, rpoints):
-        if not silent_mode:
-            print(f"\n━━━ RONDA {r}/{rounds} ━━━")
 
         # Turno del jugador 1
-        if not silent_mode:
-            print(f"\nTurno de {player1.character}")
         dice1 = random.randint(1, 6)
         dice2 = random.randint(1, 6)
         dice = dice1 + dice2
-        if not silent_mode:
-            print(f"Dados: {dice1} y {dice2}  →  Total {dice}")
         for _ in range(dice):
             move_player(player1, timeout, is_agent_turn=False, current_round=r)
-        if not silent_mode:
-            print(f"{player1.character} avanza hasta la casilla {player1.position.id}")
         player1.position.effect(player1, silent_mode)
-        if not silent_mode:
-            print(f"Inventario — Insignias: {player1.badges} | Basura: {player1.trash}")
 
         # Turno del jugador 2
-        if not silent_mode:
-            print(f"\nTurno de {player2.character}")
         dice1 = random.randint(1, 6)
         dice2 = random.randint(1, 6)
         dice = dice1 + dice2
-        if not silent_mode:
-            print(f"Dados: {dice1} y {dice2}  →  Total {dice}")
-        
         for _ in range(dice):
             move_player(player2, timeout, is_agent_turn=use_agent, current_round=r)
-        if not silent_mode:
-            print(f"{player2.character} avanza hasta la casilla {player2.position.id}")
         player2.position.effect(player2, silent_mode)
-        if not silent_mode:
-            print(f"Inventario — Insignias: {player2.badges} | Basura: {player2.trash}")
         
         for i in rpoints:
             if i.timeout > 0:
@@ -426,48 +345,18 @@ def BoardGame(use_agent=None, train_agent=None, agent=None, silent_mode=False):
 
     for r in range(rounds):
         round(r + 1, player1, player2, recycle_timeout, recycling_points)
-    
-    if not silent_mode:
-        print("\n¡Fin del juego!")
-        print("Resultados finales:")
-        print(f'{player1.character} — Insignias: {player1.badges} | Basura restante: {player1.trash}')
-        print(f'{player2.character} — Insignias: {player2.badges} | Basura restante: {player2.trash}')
-        print("")
 
     player2_won = False
-    if (player1.badges > player2.badges):
-        if not silent_mode:
-            print(f'{player1.character} gana la partida con más insignias que su oponente.')
-            print(f'¡Felicidades, {player1.character}! ¡Has ganado!')
-    elif (player2.badges > player1.badges):
-        if not silent_mode:
-            print(f'{player2.character} gana la partida con más insignias que su oponente.')
-            print(f'¡Felicidades, {player2.character}! ¡Has ganado!')
+    if (player2.badges > player1.badges):
         player2_won = True
     else:
-        if (player1.trash > player2.trash):
-            if not silent_mode:
-                print(f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {player1.character} gana la partida gracias a su mayor esfuerzo recolectando basura.') 
-                print(f'¡Felicidades, {player1.character}! ¡Has ganado!')
-        elif (player2.trash > player1.trash):
-            if not silent_mode:
-                print(f'¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {player2.character} gana la partida gracias a su mayor esfuerzo recolectando basura.') 
-                print(f'¡Felicidades, {player2.character}! ¡Has ganado!')
+        if (player2.trash > player1.trash):
             player2_won = True
-        else:
-            if not silent_mode:
-                print("¡Es un empate total! Ambos jugadores tienen las mismas insignias y basura.")
     
-    # Finalizar episodio para el agente si está entrenando
     if use_agent and train_agent and game_agent:
         game_agent.end_episode(player2_won)
     
     return player2_won if use_agent else None
 
 if __name__ == "__main__":
-    print("🎮 ECORALLEY - CONFIGURACIÓN ACTUAL:")
-    print(f"Modo de juego: {MODO_JUEGO}")
-    print("Modo: SOLO JUGAR (sin entrenamiento)")
-    print("\n" + "="*60)
-    
     BoardGame()

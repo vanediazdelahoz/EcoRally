@@ -23,7 +23,6 @@ def show_progress_bar(current, total, prefix='Progreso', suffix='Completo', leng
 
 class TrainingReporter:
     # Reportes detallados del entrenamiento
-    
     def __init__(self):
         self.reset()
     
@@ -272,7 +271,6 @@ def test_agent(episodes=10):
         print(f"⚠️ RENDIMIENTO: NECESITA MEJORA")
 
 def show_model_info():
-    """Muestra información del modelo"""
     model_path = "agent/agent_policy.pkl"
     
     print(f"\n📊 INFORMACIÓN DEL MODELO")
@@ -296,7 +294,6 @@ def show_model_info():
         print("❌ Error al cargar el modelo")
 
 def main():
-    """Función principal con menú interactivo"""
     while True:
         show_training_menu()
         
