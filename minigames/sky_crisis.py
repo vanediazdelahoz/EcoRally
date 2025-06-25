@@ -92,7 +92,6 @@ class CieloEnCrisisState(State):
         self.tiempo_juego = 30
         self.inicio_tiempo = pygame.time.get_ticks()
 
-        # Estados del minijuego
         self.game_state = "RULES"
         self.countdown = 3
         self.countdown_timer = 0
@@ -228,12 +227,10 @@ class CieloEnCrisisState(State):
         screen.blit(self.fondo, (0, 0))
 
         if self.game_state == "RULES":
-            # Fondo oscuro para mejor legibilidad de las instrucciones
-            bg_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-            bg_surface.fill((0, 0, 0, 240))  # Fondo más oscuro
-            screen.blit(bg_surface, (0, 0))
+            overlay_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay_surface.fill((0, 0, 0, 180))
+            screen.blit(overlay_surface, (0, 0))
             
-            # Mostrar reglas del minijuego
             rules_text = [
                 "Cielo En Crisis",
                 "",
@@ -251,22 +248,24 @@ class CieloEnCrisisState(State):
                 "Presiona ENTER para comenzar"
             ]
             
-            y_offset = 50
-            for line in rules_text:
-                if line:
-                    text_surface = self.font_small.render(line, True, WHITE)
-                    text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
-                    screen.blit(text_surface, text_rect)
-                y_offset += 30
+            line_surfaces = [self.font_small.render(line, True, WHITE) for line in rules_text]
+            
+            line_height = 30
+            total_height = len(line_surfaces) * line_height
+            
+            y_offset = (SCREEN_HEIGHT - total_height) // 2
+            
+            for text_surface in line_surfaces:
+                text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+                screen.blit(text_surface, text_rect)
+                y_offset += line_height
             return
 
         elif self.game_state == "COUNTDOWN":
-            # Mostrar conteo
             countdown_text = str(self.countdown) if self.countdown > 0 else "¡EMPEZAR!"
             countdown_surface = self.font_final.render(countdown_text, True, WHITE)
             countdown_rect = countdown_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
             
-            # Fondo para el conteo
             bg_rect = pygame.Rect(
                 countdown_rect.x - 50,
                 countdown_rect.y - 30,
@@ -281,7 +280,6 @@ class CieloEnCrisisState(State):
             screen.blit(countdown_surface, countdown_rect)
             return
 
-        # Resto del juego (cuando está jugando o terminado)
         pygame.draw.line(
             screen, BLACK, (SCREEN_WIDTH // 2, 0), (SCREEN_WIDTH // 2, SCREEN_HEIGHT), 2)
 
