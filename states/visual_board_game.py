@@ -161,7 +161,7 @@ class BoardGameView(State):
         self.bot_action_delay = 0
         self.bot_thinking = False
         self.bot_next_action = None
-        self.is_bot_processing = False # Flag para evitar que el bot se bloquee a sí mismo
+        self.is_bot_processing = False
 
         self.bot_second_dice_timer = 0
         self.bot_second_dice_delay = 0
@@ -302,9 +302,6 @@ class BoardGameView(State):
                 self.turn_message = f"Turno: {self.player2_name}"
                 self.waiting_for_enter = True
                 self.bottom_message = "Presiona ENTER para continuar"
-                if self.is_bot_mode:
-                    self.schedule_bot_action(
-                        "continue_after_message", random.randint(1000, 2000))
             else:
                 self.center_message += "Empate. Volviendo a tirar..."
                 self.waiting_for_enter = True
@@ -557,7 +554,6 @@ class BoardGameView(State):
                             self.game_state = "CHOICE"
                             self.message_timer = pygame.time.get_ticks()
                         else:
-                            # Movimiento fluido y continuo sin pausas
                             self.move_current_player()
                     else:
                         self.apply_square_effect(current_player_obj)
@@ -670,7 +666,6 @@ class BoardGameView(State):
         if self.moves_remaining <= 0:
             self.apply_square_effect(current_player_obj)
         else:
-            # Movimiento fluido y continuo sin pausas
             self.move_current_player()
 
     def bot_make_choice(self):
@@ -692,19 +687,6 @@ class BoardGameView(State):
                 range(len(current_player_obj.position.next_squares)))
 
             action = self.agent.get_action(state, possible_actions)
-
-            current_pos = current_player_obj.position.id
-            if current_pos == 23:
-                next_square_id = 27 if action == 0 else 24
-            elif current_pos == 32:
-                next_square_id = 34 if action == 0 else 33
-            elif current_pos == 48:
-                next_square_id = 53 if action == 0 else 49
-            else:
-                next_square_id = current_player_obj.position.next_squares[action].id
-                
-            self.bottom_message = (
-                f"{self.player2_name} elige el camino hacia la casilla {next_square_id}")
             self.make_choice(action)
         else:
             action = random.choice(range(len(current_player_obj.position.next_squares)))
@@ -778,9 +760,6 @@ class BoardGameView(State):
         self.waiting_for_enter = True
         self.message_timer = pygame.time.get_ticks()
         self.game_state = "MINIGAME"
-
-        if self.is_bot_mode:
-            self.schedule_bot_action("continue_after_message", random.randint(1000, 2000))
 
     def launch_minigame(self):
         if self.selected_minigame == "to_the_bin":
@@ -864,9 +843,6 @@ class BoardGameView(State):
         self.game_state = "ROUND_SUMMARY"
         self.message_timer = pygame.time.get_ticks()
 
-        if self.is_bot_mode:
-            self.schedule_bot_action("continue_after_message", random.randint(1500, 2500))
-
     def start_new_round_after_summary(self):
         points_to_reactivate = []
         for point in self.recycling_points:
@@ -889,9 +865,6 @@ class BoardGameView(State):
         self.game_state = "NEW_ROUND"
         self.message_timer = pygame.time.get_ticks()
         
-        if self.is_bot_mode:
-            self.schedule_bot_action("continue_after_message", random.randint(1000, 1500))
-
     def show_recycling_status(self):
         active_points = [point for point in self.recycling_points if point.timeout == 0]
         inactive_points = [point for point in self.recycling_points if point.timeout > 0]
@@ -915,9 +888,6 @@ class BoardGameView(State):
         self.dice_total_message = ""
         self.game_state = "RECYCLING_STATUS"
         self.message_timer = pygame.time.get_ticks()
-
-        if self.is_bot_mode:
-            self.schedule_bot_action("continue_after_message", random.randint(1000, 1500))
 
     def start_new_round(self):
         self.start_new_round_tracking()
@@ -979,13 +949,14 @@ class BoardGameView(State):
         if not self.can_handle_input or self.transitioning or self.transition.active:
             return
 
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                while len(self.game.state_stack) > 1:
-                    self.game.state_stack.pop()
-                return
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            while len(self.game.state_stack) > 1:
+                self.game.state_stack.pop()
+            return
 
-        if self.is_bot_mode and self.current_player == 2 and not self.is_bot_processing:
+        bot_active_states = ["TURN_START", "DICE_ROLL", "DICE_SHOWING_RESULT", "MOVING", "CHOICE", "SQUARE_EFFECT", "PURPLE_DICE", "PURPLE_DICE_RESULT", "RECYCLING_POINT_PASS"]
+        
+        if self.is_bot_mode and self.current_player == 2 and self.game_state in bot_active_states and not self.is_bot_processing:
             if event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
                 return
 
@@ -1003,8 +974,6 @@ class BoardGameView(State):
                             self.bottom_message = "Presiona ENTER para continuar"
                             self.waiting_for_enter = True
                             self.message_timer = pygame.time.get_ticks()
-                            if self.is_bot_mode:
-                                self.schedule_bot_action("continue_after_message", random.randint(1000, 1500))
                         else:
                             self.start_initial_dice_roll()
 
@@ -1067,7 +1036,6 @@ class BoardGameView(State):
         self.update_dice_animation(dt)
         self.update_player_movement(dt)
 
-        # Lógica del BOT
         if self.is_bot_mode and self.bot_next_action and pygame.time.get_ticks() - self.bot_timer > self.bot_action_delay:
             self.execute_bot_action()
 
@@ -1168,7 +1136,6 @@ class BoardGameView(State):
         if has_dice:
             dice_y = current_y
             if self.game_state == "INITIAL_ROLL":
-                # Lógica de renderizado para el tiro inicial... (sin cambios)
                 if self.initial_dice_phase == 1:
                     dice_pos = (SCREEN_WIDTH // 2, dice_y)
                     if self.initial_dice1_rolling:
@@ -1202,7 +1169,6 @@ class BoardGameView(State):
                     dice_img = self.dice_images[(self.purple_dice_value or 1) - 1]
                 screen.blit(dice_img, (dice_pos[0] - dice_img.get_width() // 2, dice_pos[1]))
             else:
-                # Lógica de renderizado para los dados dobles del turno
                 dice_width, spacing = 80, 30
                 total_width = dice_width * 2 + spacing
                 start_x = (SCREEN_WIDTH - total_width) / 2.0
@@ -1210,7 +1176,6 @@ class BoardGameView(State):
                 dice1_pos = (start_x, dice_y)
                 dice2_pos = (start_x + dice_width + spacing, dice_y)
 
-                # Dado 1
                 if self.dice1_rolling:
                     dice1_img = self.dice_images[self.current_dice1_frame]
                 elif self.dice1_value is not None:
@@ -1221,7 +1186,6 @@ class BoardGameView(State):
                 if dice1_img:
                     screen.blit(dice1_img, dice1_pos)
 
-                # Dado 2
                 if self.dice2_rolling:
                     dice2_img = self.dice_images[self.current_dice2_frame]
                 elif self.dice2_value is not None:
@@ -1232,7 +1196,6 @@ class BoardGameView(State):
                 if dice2_img:
                     screen.blit(dice2_img, dice2_pos)
 
-                # Símbolo '+' centrado
                 if self.dice1_value is not None or self.dice1_rolling:
                     plus_font = self.font_title
                     plus_text = plus_font.render("+", True, WHITE)

@@ -72,7 +72,6 @@ class PescaResponsableState(State):
         self.trash_list = []
         self.start_ticks = pygame.time.get_ticks()
         
-        # Estados del minijuego
         self.game_state = "RULES"
         self.countdown = 3
         self.countdown_timer = 0
@@ -192,7 +191,8 @@ class PescaResponsableState(State):
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                self._start_transition(lambda: self.game.state_stack.pop())
+                self._start_transition(lambda: [self.game.state_stack.pop() for _ in range(len(self.game.state_stack) - 1)])
+                return
 
             elif self.game_state == "RULES" and event.key == pygame.K_RETURN:
                 self.game_state = "COUNTDOWN"

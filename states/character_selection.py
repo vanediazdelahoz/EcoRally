@@ -110,7 +110,7 @@ class CharacterSelection(State):
 
         self.controls_p1 = ["A/D - Cambiar", "F - Confirmar"]
         self.controls_p2 = (
-            ["←/→ - Cambiar", "Enter - Confirmar"]
+            ["<-/-> - Cambiar", "Enter - Confirmar"]
             if not config.machine_mode
             else ["Automático"])
 

@@ -151,7 +151,8 @@ class ALaCanecaState(State):
             return
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                self._start_transition(lambda: self.game.state_stack.pop())
+                self._start_transition(lambda: [self.game.state_stack.pop() for _ in range(len(self.game.state_stack) - 1)])
+                return
             
             if self.game_state == "RULES" and event.key == pygame.K_RETURN:
                 self.game_state = "COUNTDOWN"
