@@ -78,7 +78,6 @@ class BoardGameView(State):
         }
 
         self.load_character_images()
-
         self.load_dice_images()
 
         self.game_state = "INITIAL_ROLL"
@@ -162,6 +161,7 @@ class BoardGameView(State):
         self.bot_action_delay = 0
         self.bot_thinking = False
         self.bot_next_action = None
+        self.is_bot_processing = False # Flag para evitar que el bot se bloquee a sí mismo
 
         self.bot_second_dice_timer = 0
         self.bot_second_dice_delay = 0
@@ -176,8 +176,8 @@ class BoardGameView(State):
         model_path = "agent/agent_policy.pkl"
         self.agent = DynaQAgent(train_mode=False)
 
-        os.path.exists(model_path)
-        self.agent.load_policy(model_path)
+        if os.path.exists(model_path):
+            self.agent.load_policy(model_path)
 
     def load_character_images(self):
         try:
@@ -551,18 +551,14 @@ class BoardGameView(State):
                                 self.bottom_message = (
                                     f"{self.player2_name} está decidiendo...")
                                 self.schedule_bot_action(
-                                    "bot_make_choice", random.randint(800, 1500))
+                                    "bot_make_choice", random.randint(800, 1500), show_thinking=True)
 
                             self.waiting_for_enter = False
                             self.game_state = "CHOICE"
                             self.message_timer = pygame.time.get_ticks()
                         else:
-                            if self.is_bot_mode and player_id == 2:
-                                self.schedule_bot_action(
-                                    "move_current_player", random.randint(300, 600))
-                            else:
-                                pygame.time.set_timer(
-                                    pygame.USEREVENT + 1, 400)
+                            # Movimiento fluido y continuo sin pausas
+                            self.move_current_player()
                     else:
                         self.apply_square_effect(current_player_obj)
                         player_data["anim_frame"] = 0
@@ -586,6 +582,9 @@ class BoardGameView(State):
         self.bottom_message = "Presiona ENTER para continuar"
         self.game_state = "RECYCLING_POINT_PASS"
         self.message_timer = pygame.time.get_ticks()
+
+        if self.is_bot_mode and self.current_player == 2:
+            self.schedule_bot_action("continue_after_message", random.randint(1000, 1500))
 
     def move_current_player(self):
         if self.moves_remaining <= 0:
@@ -613,7 +612,7 @@ class BoardGameView(State):
 
             if self.is_bot_mode and self.current_player == 2:
                 self.bottom_message = f"{self.player2_name} está decidiendo..."
-                self.schedule_bot_action("bot_make_choice", random.randint(800, 1500))
+                self.schedule_bot_action("bot_make_choice", random.randint(800, 1500), show_thinking=True)
 
             self.waiting_for_enter = False
             self.game_state = "CHOICE"
@@ -659,22 +658,20 @@ class BoardGameView(State):
         player_data["pos_idx"] = chosen_square.id
         player_data["pos_actual"] = list(self.casillas[chosen_square.id])
 
+        self.moves_remaining -= 1
+        
         if chosen_square.recycle:
             self.process_recycling_point_on_pass(current_player_obj, chosen_square)
             return
 
-        self.moves_remaining -= 1
         self.game_state = "MOVING"
-
         self.center_message = ""
 
         if self.moves_remaining <= 0:
             self.apply_square_effect(current_player_obj)
         else:
-            if self.is_bot_mode and self.current_player == 2:
-                self.schedule_bot_action("move_current_player", random.randint(300, 600))
-            else:
-                pygame.time.set_timer(pygame.USEREVENT + 1, 400)
+            # Movimiento fluido y continuo sin pausas
+            self.move_current_player()
 
     def bot_make_choice(self):
         if self.game_state != "CHOICE" or self.current_player != 2:
@@ -782,6 +779,9 @@ class BoardGameView(State):
         self.message_timer = pygame.time.get_ticks()
         self.game_state = "MINIGAME"
 
+        if self.is_bot_mode:
+            self.schedule_bot_action("continue_after_message", random.randint(1000, 2000))
+
     def launch_minigame(self):
         if self.selected_minigame == "to_the_bin":
             from minigames.to_the_bin import ALaCanecaState
@@ -864,6 +864,9 @@ class BoardGameView(State):
         self.game_state = "ROUND_SUMMARY"
         self.message_timer = pygame.time.get_ticks()
 
+        if self.is_bot_mode:
+            self.schedule_bot_action("continue_after_message", random.randint(1500, 2500))
+
     def start_new_round_after_summary(self):
         points_to_reactivate = []
         for point in self.recycling_points:
@@ -885,6 +888,9 @@ class BoardGameView(State):
         self.dice_total_message = ""
         self.game_state = "NEW_ROUND"
         self.message_timer = pygame.time.get_ticks()
+        
+        if self.is_bot_mode:
+            self.schedule_bot_action("continue_after_message", random.randint(1000, 1500))
 
     def show_recycling_status(self):
         active_points = [point for point in self.recycling_points if point.timeout == 0]
@@ -909,6 +915,9 @@ class BoardGameView(State):
         self.dice_total_message = ""
         self.game_state = "RECYCLING_STATUS"
         self.message_timer = pygame.time.get_ticks()
+
+        if self.is_bot_mode:
+            self.schedule_bot_action("continue_after_message", random.randint(1000, 1500))
 
     def start_new_round(self):
         self.start_new_round_tracking()
@@ -937,60 +946,55 @@ class BoardGameView(State):
         self.waiting_for_enter = False
         self.message_timer = pygame.time.get_ticks()
 
-    def schedule_bot_action(self, action_type, delay_ms):
-        self.bot_thinking = True
+    def schedule_bot_action(self, action_type, delay_ms, show_thinking=False):
+        self.bot_thinking = show_thinking
         self.bot_timer = pygame.time.get_ticks()
         self.bot_action_delay = delay_ms
         self.bot_next_action = action_type
 
     def execute_bot_action(self):
+        action = self.bot_next_action
+        self.bot_next_action = None
         self.bot_thinking = False
 
-        if self.bot_next_action == "stop_initial_dice":
-            self.stop_initial_dice(2)
-        elif self.bot_next_action == "continue_after_message":
+        self.is_bot_processing = True
+
+        if action == "continue_after_message":
             if self.waiting_for_enter:
-                self.handle_event(
-                    pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_RETURN}))
-        elif self.bot_next_action == "stop_first_dice":
+                self.handle_event(pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_RETURN}))
+        elif action == "stop_initial_dice":
+            self.stop_initial_dice(2)
+        elif action == "stop_first_dice":
             self.stop_first_dice()
-        elif self.bot_next_action == "move_current_player":
+        elif action == "move_current_player":
             self.move_current_player()
-        elif self.bot_next_action == "bot_make_choice":
+        elif action == "bot_make_choice":
             self.bot_make_choice()
-        elif self.bot_next_action == "stop_purple_dice":
+        elif action == "stop_purple_dice":
             self.stop_purple_dice()
 
-        self.bot_next_action = None
+        self.is_bot_processing = False
 
     def handle_event(self, event):
         if not self.can_handle_input or self.transitioning or self.transition.active:
             return
 
-        if event.type == pygame.USEREVENT + 1:
-            pygame.time.set_timer(pygame.USEREVENT + 1, 0)
-            if self.game_state == "MOVING" and self.moves_remaining > 0:
-                self.move_current_player()
-
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                if self.game_state == "GAME_OVER":
-                    self.game.state_stack.pop(-2)
-                    self.game.state_stack.pop(-2)
-                    self.game.state_stack.pop(-1)
-                else:
-                    self.game.state_stack.pop(-2)
-                    self.game.state_stack.pop(-2)
-                    self.game.state_stack.pop(-1)
+                while len(self.game.state_stack) > 1:
+                    self.game.state_stack.pop()
+                return
 
-            elif event.key == pygame.K_RETURN:
+        if self.is_bot_mode and self.current_player == 2 and not self.is_bot_processing:
+            if event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
+                return
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RETURN:
                 if self.game_state == "INITIAL_ROLL":
                     if self.initial_dice_phase == 1 and self.initial_dice1_rolling:
                         self.stop_initial_dice(1)
-                    elif (
-                        self.initial_dice_phase == 2
-                        and self.initial_dice2_rolling
-                        and not self.is_bot_mode):
+                    elif self.initial_dice_phase == 2 and self.initial_dice2_rolling and not self.is_bot_mode:
                         self.stop_initial_dice(2)
                     elif self.initial_dice_phase == 3 and self.waiting_for_enter:
                         if self.current_player is not None:
@@ -999,20 +1003,18 @@ class BoardGameView(State):
                             self.bottom_message = "Presiona ENTER para continuar"
                             self.waiting_for_enter = True
                             self.message_timer = pygame.time.get_ticks()
+                            if self.is_bot_mode:
+                                self.schedule_bot_action("continue_after_message", random.randint(1000, 1500))
                         else:
                             self.start_initial_dice_roll()
 
                 elif self.waiting_for_enter:
                     if self.game_state == "TURN_START":
-                        self.game_state = "PLAYER_TURN"
-                        self.center_message = ""
-                        self.waiting_for_enter = False
+                        self.start_dice_roll()
                     elif self.game_state == "DICE_SHOWING_RESULT":
                         self.dice_total_message = ""
                         self.dice_result = None
-                        self.game_state = "MOVING"
-                        self.waiting_for_enter = False
-                        self.bottom_message = f"Pasos restantes: {self.moves_remaining} - ENTER para continuar"
+                        self.move_current_player()
                     elif self.game_state == "SQUARE_EFFECT":
                         self.end_turn()
                     elif self.game_state == "PURPLE_DICE_RESULT":
@@ -1024,7 +1026,6 @@ class BoardGameView(State):
                         if self.moves_remaining <= 0:
                             self.end_turn()
                         else:
-                            self.game_state = "MOVING"
                             self.move_current_player()
                     elif self.game_state == "MINIGAME":
                         self.launch_minigame()
@@ -1034,8 +1035,6 @@ class BoardGameView(State):
                         self.start_new_round()
                     elif self.game_state == "NEW_ROUND":
                         self.show_recycling_status()
-                    elif self.game_state == "RECYCLING_MESSAGE":
-                        self.start_turn()
 
                 elif self.game_state == "DICE_ROLL":
                     if self.dice1_rolling:
@@ -1047,18 +1046,12 @@ class BoardGameView(State):
                     if self.purple_dice_rolling:
                         self.stop_purple_dice()
 
-            elif self.game_state == "PLAYER_TURN":
-                self.start_dice_roll()
-
             elif self.game_state == "CHOICE":
                 if event.key == pygame.K_LEFT:
                     self.make_choice(0)
                 elif event.key == pygame.K_RIGHT:
                     self.make_choice(1 if len(self.choice_options) > 1 else 0)
 
-            elif self.game_state == "MOVING":
-                self.move_current_player()
-            
     def _start_transition(self, callback):
         self.transitioning = True
         self.can_handle_input = False
@@ -1072,37 +1065,14 @@ class BoardGameView(State):
             self.can_handle_input = True
 
         self.update_dice_animation(dt)
-
         self.update_player_movement(dt)
 
-        if (
-            self.bot_thinking
-            and pygame.time.get_ticks() - self.bot_timer > self.bot_action_delay):
+        # Lógica del BOT
+        if self.is_bot_mode and self.bot_next_action and pygame.time.get_ticks() - self.bot_timer > self.bot_action_delay:
             self.execute_bot_action()
 
-        if (
-            self.bot_second_dice_timer > 0
-            and self.dice2_rolling
-            and self.is_bot_mode
-            and self.current_player == 2
-            and pygame.time.get_ticks() - self.bot_second_dice_timer > self.bot_second_dice_delay):
+        if self.is_bot_mode and self.current_player == 2 and self.bot_second_dice_timer > 0 and self.dice2_rolling and pygame.time.get_ticks() - self.bot_second_dice_timer > self.bot_second_dice_delay:
             self.stop_second_dice()
-
-        if self.game_state == "MOVING" and self.moves_remaining > 0:
-            player_data = (
-                self.player1_data if self.current_player == 1 else self.player2_data)
-            if not player_data["moving"]:
-                if self.is_bot_mode and self.current_player == 2:
-                    if not self.bot_thinking:
-                        self.schedule_bot_action(
-                            "move_current_player", random.randint(300, 600))
-                else:
-                    if pygame.time.get_ticks() - self.message_timer > 500:
-                        self.move_current_player()
-
-        if self.game_state == "PLAYER_TURN":
-            if pygame.time.get_ticks() - self.message_timer > 1000:
-                self.start_dice_roll()
 
     def render(self, screen):
         if self.bg_image:
@@ -1116,12 +1086,9 @@ class BoardGameView(State):
 
             icon_width = icon.get_width()
             icon_height = icon.get_height()
-
             offset_pos = (pos[0] + icon_width / 3, pos[1] - icon_height / 3)
-
             icon_rect = icon.get_rect(center=offset_pos)
-            render_items.append(
-                (icon_rect.bottom, icon, icon_rect))
+            render_items.append((icon_rect.bottom, icon, icon_rect))
 
         players_to_draw = [
             (1, self.player1_data, self.player1_frames),
@@ -1152,10 +1119,7 @@ class BoardGameView(State):
             or self.game_state == "PURPLE_DICE"
             or self.game_state == "PURPLE_DICE_RESULT"
             or self.game_state == "DICE_SHOWING_RESULT"
-            or (
-                self.dice1_value is not None
-                and self.dice2_value is not None
-                and self.game_state in ["DICE_ROLL", "DICE_SHOWING_RESULT"]))
+            or (self.dice1_value is not None and self.game_state in ["DICE_ROLL", "DICE_SHOWING_RESULT"]))
         has_dice_total = bool(self.dice_total_message)
 
         total_height = 0
@@ -1189,140 +1153,102 @@ class BoardGameView(State):
                 box_height = len(rendered_lines) * line_height + 20
                 box_x = (SCREEN_WIDTH - box_width) // 2
 
-                if self.game_state in ["RULES", "COUNTDOWN"]:
-                    bg_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-                    bg_surface.fill((0, 0, 0, 180))
-                    screen.blit(bg_surface, (0, 0))
-                    
-                    msg_bg_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
-                    msg_bg_surface.fill((0, 0, 0, 200))
-                    screen.blit(msg_bg_surface, (box_x, current_y))
-                else:
-                    bg_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
-                    bg_surface.fill((0, 0, 0, 200))
-                    screen.blit(bg_surface, (box_x, current_y))
+                bg_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+                bg_surface.fill((0, 0, 0, 200))
+                screen.blit(bg_surface, (box_x, current_y))
 
-                pygame.draw.rect(
-                    screen, WHITE, (box_x, current_y, box_width, box_height), 2)
+                pygame.draw.rect(screen, WHITE, (box_x, current_y, box_width, box_height), 2)
 
                 for i, line_surface in enumerate(rendered_lines):
-                    line_rect = line_surface.get_rect(
-                        center=(SCREEN_WIDTH // 2, current_y + 20 + i * line_height))
+                    line_rect = line_surface.get_rect(center=(SCREEN_WIDTH // 2, current_y + 20 + i * line_height))
                     screen.blit(line_surface, line_rect)
 
                 current_y += box_height + 20
 
         if has_dice:
             dice_y = current_y
-
             if self.game_state == "INITIAL_ROLL":
+                # Lógica de renderizado para el tiro inicial... (sin cambios)
                 if self.initial_dice_phase == 1:
                     dice_pos = (SCREEN_WIDTH // 2, dice_y)
                     if self.initial_dice1_rolling:
                         dice_img = self.dice_images[self.current_initial_dice1_frame]
                     else:
                         dice_img = self.dice_images[(self.initial_dice1_value or 1) - 1]
-                    screen.blit(
-                        dice_img, (dice_pos[0] - dice_img.get_width() // 2, dice_pos[1]))
-
+                    screen.blit(dice_img, (dice_pos[0] - dice_img.get_width() // 2, dice_pos[1]))
                     p1_label = self.font_small.render(self.player1_name, True, WHITE)
-                    screen.blit(
-                        p1_label,
-                        (dice_pos[0] - p1_label.get_width() // 2, dice_pos[1] + 90),)
-
+                    screen.blit(p1_label, (dice_pos[0] - p1_label.get_width() // 2, dice_pos[1] + 90))
                 elif self.initial_dice_phase >= 2:
-                    dice_width = 80
-                    dice_spacing = 40
+                    dice_width, dice_spacing = 80, 40
                     total_width = dice_width * 2 + dice_spacing
                     start_x = (SCREEN_WIDTH - total_width) // 2
-                    
-                    dice1_pos = (start_x, dice_y)
-                    dice2_pos = (start_x + dice_width + dice_spacing, dice_y)
-
+                    dice1_pos, dice2_pos = (start_x, dice_y), (start_x + dice_width + dice_spacing, dice_y)
                     dice1_img = self.dice_images[self.initial_dice1_value - 1]
                     if self.initial_dice2_rolling:
                         dice2_img = self.dice_images[self.current_initial_dice2_frame]
                     else:
-                        dice2_img = self.dice_images[
-                            (self.initial_dice2_value or 1) - 1]
-
+                        dice2_img = self.dice_images[(self.initial_dice2_value or 1) - 1]
                     screen.blit(dice1_img, dice1_pos)
                     screen.blit(dice2_img, dice2_pos)
-
                     p1_label = self.font_small.render(self.player1_name, True, WHITE)
                     p2_label = self.font_small.render(self.player2_name, True, WHITE)
-                    screen.blit(
-                        p1_label,
-                        (
-                            dice1_pos[0] + dice_width // 2 - p1_label.get_width() // 2,
-                            dice1_pos[1] + 90,),)
-                    screen.blit(
-                        p2_label,
-                        (
-                            dice2_pos[0] + dice_width // 2 - p2_label.get_width() // 2,
-                            dice2_pos[1] + 90,),)
-
-            elif (
-                self.game_state == "PURPLE_DICE"
-                or self.game_state == "PURPLE_DICE_RESULT"):
+                    screen.blit(p1_label, (dice1_pos[0] + dice_width // 2 - p1_label.get_width() // 2, dice1_pos[1] + 90))
+                    screen.blit(p2_label, (dice2_pos[0] + dice_width // 2 - p2_label.get_width() // 2, dice2_pos[1] + 90))
+            elif self.game_state == "PURPLE_DICE" or self.game_state == "PURPLE_DICE_RESULT":
                 dice_pos = (SCREEN_WIDTH // 2, dice_y)
                 if self.purple_dice_rolling:
                     dice_img = self.dice_images[self.current_purple_dice_frame]
                 else:
                     dice_img = self.dice_images[(self.purple_dice_value or 1) - 1]
-                screen.blit(
-                    dice_img, (dice_pos[0] - dice_img.get_width() // 2, dice_pos[1]))
-
+                screen.blit(dice_img, (dice_pos[0] - dice_img.get_width() // 2, dice_pos[1]))
             else:
-                dice_width = 80
-                spacing = 40 
-                total_dice_width = dice_width * 2 + spacing
-                start_x = (SCREEN_WIDTH - total_dice_width) // 2
+                # Lógica de renderizado para los dados dobles del turno
+                dice_width, spacing = 80, 30
+                total_width = dice_width * 2 + spacing
+                start_x = (SCREEN_WIDTH - total_width) / 2.0
                 
                 dice1_pos = (start_x, dice_y)
                 dice2_pos = (start_x + dice_width + spacing, dice_y)
 
+                # Dado 1
                 if self.dice1_rolling:
                     dice1_img = self.dice_images[self.current_dice1_frame]
                 elif self.dice1_value is not None:
                     dice1_img = self.dice_images[self.dice1_value - 1]
                 else:
                     dice1_img = None
+                
+                if dice1_img:
+                    screen.blit(dice1_img, dice1_pos)
 
+                # Dado 2
                 if self.dice2_rolling:
                     dice2_img = self.dice_images[self.current_dice2_frame]
                 elif self.dice2_value is not None:
                     dice2_img = self.dice_images[self.dice2_value - 1]
                 else:
                     dice2_img = None
-
-                if dice1_img:
-                    screen.blit(dice1_img, dice1_pos)
-
+                
                 if dice2_img:
                     screen.blit(dice2_img, dice2_pos)
-                
+
+                # Símbolo '+' centrado
                 if self.dice1_value is not None or self.dice1_rolling:
-                    plus_font = load_font("assets/fonts/PublicPixel.ttf", 48)
+                    plus_font = self.font_title
                     plus_text = plus_font.render("+", True, WHITE)
-                    plus_x = dice1_pos[0] + dice_width + (spacing // 2)
-                    plus_y = dice_y + (dice_width // 2)
+                    plus_x = dice1_pos[0] + dice_width + (spacing / 2.0)
+                    plus_y = dice_y + (dice_width / 2.0)
                     plus_rect = plus_text.get_rect(center=(plus_x, plus_y))
                     screen.blit(plus_text, plus_rect)
-
+            
             current_y += 80 + 20
 
         if has_dice_total:
             dice_text = self.font_title.render(self.dice_total_message, True, WHITE)
             dice_rect = dice_text.get_rect(center=(SCREEN_WIDTH // 2, current_y))
 
-            bg_rect = pygame.Rect(
-                dice_rect.x - 20,
-                dice_rect.y - 10,
-                dice_rect.width + 40,
-                dice_rect.height + 20,)
-            bg_surface = pygame.Surface(
-                (bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_rect = pygame.Rect(dice_rect.x - 20, dice_rect.y - 10, dice_rect.width + 40, dice_rect.height + 20)
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
             bg_surface.fill((0, 0, 0, 200))
             screen.blit(bg_surface, bg_rect)
             pygame.draw.rect(screen, WHITE, bg_rect, 2)
@@ -1330,26 +1256,18 @@ class BoardGameView(State):
 
         if self.bottom_message:
             bottom_text = self.font_small.render(self.bottom_message, True, WHITE)
-            bottom_rect = bottom_text.get_rect(
-                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
-
-            bg_rect = pygame.Rect(
-                bottom_rect.x - 10,
-                bottom_rect.y - 5,
-                bottom_rect.width + 20,
-                bottom_rect.height + 10,)
-            bg_surface = pygame.Surface(
-                (bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bottom_rect = bottom_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+            bg_rect = pygame.Rect(bottom_rect.x - 10, bottom_rect.y - 5, bottom_rect.width + 20, bottom_rect.height + 10)
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
             bg_surface.fill((0, 0, 0, 150))
             screen.blit(bg_surface, bg_rect)
             screen.blit(bottom_text, bottom_rect)
 
         self.draw_game_info(screen)
 
-        if self.bot_thinking and self.current_player == 2 and self.is_bot_mode:
+        if self.bot_thinking:
             thinking_text = self.font_small.render("Pensando...", True, WHITE)
-            thinking_rect = thinking_text.get_rect(
-                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 60))
+            thinking_rect = thinking_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 60))
             screen.blit(thinking_text, thinking_rect)
 
         self.transition.render(screen)
@@ -1358,41 +1276,26 @@ class BoardGameView(State):
         if self.turn_message:
             turn_text = self.font_turn.render(self.turn_message, True, WHITE)
             turn_rect = turn_text.get_rect(topleft=(20, 20))
-
-            bg_rect = pygame.Rect(
-                turn_rect.x - 10,
-                turn_rect.y - 5,
-                turn_rect.width + 20,
-                turn_rect.height + 10,)
-            bg_surface = pygame.Surface(
-                (bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_rect = pygame.Rect(turn_rect.x - 10, turn_rect.y - 5, turn_rect.width + 20, turn_rect.height + 10)
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
             bg_surface.fill((0, 100, 0, 150))
             screen.blit(bg_surface, bg_rect)
             screen.blit(turn_text, turn_rect)
 
         display_round = min(self.current_round, self.rounds)
-        round_text = self.font_title.render(
-            f"RONDA {display_round}/{self.rounds}", True, WHITE)
+        round_text = self.font_title.render(f"RONDA {display_round}/{self.rounds}", True, WHITE)
         round_rect = round_text.get_rect(topright=(SCREEN_WIDTH - 20, 20))
-
-        bg_rect = pygame.Rect(
-            round_rect.x - 10,
-            round_rect.y - 5,
-            round_rect.width + 20,
-            round_rect.height + 10,)
+        bg_rect = pygame.Rect(round_rect.x - 10, round_rect.y - 5, round_rect.width + 20, round_rect.height + 10)
         bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
         bg_surface.fill((0, 0, 0, 150))
         screen.blit(bg_surface, bg_rect)
         screen.blit(round_text, round_rect)
 
         y_offset = 70
-
         p1_info = f"{self.player1_name}: Insignias {self.player1.badges} | Basura {self.player1.trash}"
         p1_text = self.font_small.render(p1_info, True, WHITE)
         p1_rect = p1_text.get_rect(topright=(SCREEN_WIDTH - 20, y_offset))
-
-        bg_rect = pygame.Rect(
-            p1_rect.x - 10, p1_rect.y - 5, p1_rect.width + 20, p1_rect.height + 10)
+        bg_rect = pygame.Rect(p1_rect.x - 10, p1_rect.y - 5, p1_rect.width + 20, p1_rect.height + 10)
         bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
         bg_surface.fill((0, 0, 0, 150))
         screen.blit(bg_surface, bg_rect)
@@ -1402,9 +1305,7 @@ class BoardGameView(State):
         p2_info = f"{self.player2_name}: Insignias {self.player2.badges} | Basura {self.player2.trash}"
         p2_text = self.font_small.render(p2_info, True, WHITE)
         p2_rect = p2_text.get_rect(topright=(SCREEN_WIDTH - 20, y_offset))
-
-        bg_rect = pygame.Rect(
-            p2_rect.x - 10, p2_rect.y - 5, p2_rect.width + 20, p2_rect.height + 10)
+        bg_rect = pygame.Rect(p2_rect.x - 10, p2_rect.y - 5, p2_rect.width + 20, p2_rect.height + 10)
         bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
         bg_surface.fill((0, 0, 0, 150))
         screen.blit(bg_surface, bg_rect)
