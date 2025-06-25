@@ -166,6 +166,12 @@ class BoardGameView(State):
 
         self.bot_second_dice_timer = 0
         self.bot_second_dice_delay = 0
+        
+        # Variables para minijuegos
+        self.minigame_rules_shown = False
+        self.minigame_countdown = 0
+        self.minigame_countdown_timer = 0
+        
         self.start_initial_dice_roll()
 
     def load_agent(self):
@@ -534,13 +540,25 @@ class BoardGameView(State):
 
                             self.center_message = f"Selecciona el camino:\nPasos restantes: {self.moves_remaining}"
 
+                            # Corregir las direcciones de las bifurcaciones
+                            current_pos = current_player_obj.position.id
+                            if current_pos == 23:
+                                # Casilla 23: ← para casilla 27, → para casilla 24
+                                self.bottom_message = "← - Casilla 27 | → - Casilla 24"
+                            elif current_pos == 32:
+                                # Casilla 32: ← para casilla 34, → para casilla 33
+                                self.bottom_message = "← - Casilla 34 | → - Casilla 33"
+                            elif current_pos == 48:
+                                # Casilla 48: ← para casilla 53, → para casilla 49
+                                self.bottom_message = "← - Casilla 53 | → - Casilla 49"
+                            else:
+                                self.bottom_message = "← - Camino izquierdo | → - Camino derecho"
+
                             if self.is_bot_mode and player_id == 2:
                                 self.bottom_message = (
                                     f"{self.player2_name} está decidiendo...")
                                 self.schedule_bot_action(
                                     "bot_make_choice", random.randint(800, 1500))
-                            else:
-                                self.bottom_message = ("← - Camino izquierdo | → - Camino derecho")
 
                             self.waiting_for_enter = False
                             self.game_state = "CHOICE"
@@ -558,24 +576,35 @@ class BoardGameView(State):
 
     def process_recycling_point_on_pass(self, player, square):
         old_badges = player.badges
+        old_trash = player.trash
         player.try_recycle(self.recycle_timeout, silent_mode=True)
         new_badges = player.badges
 
         if new_badges > old_badges:
-            self.show_temporary_recycling_message(
-                f"¡{player.character} obtuvo insignia! ({old_badges} → {new_badges})")
+            self.center_message = f"¡{player.character} obtuvo una nueva insignia!\nInsignias: {old_badges} → {new_badges}"
         elif square.timeout > 0:
-            self.show_temporary_recycling_message(
-                f"¡{player.character} pasó por punto ocupado! (Se libera en {square.timeout} rondas)")
+            self.center_message = f"¡Punto de reciclaje ocupado!\nSe libera en {square.timeout} rondas"
+        elif player.trash < 20:
+            self.center_message = f"¡{player.character} no tiene suficiente basura!\nNecesita 20 de basura para reciclar\nBasura actual: {player.trash}"
         else:
-            self.show_temporary_recycling_message(
-                f"¡{player.character} no tiene suficiente basura para reciclar!")
+            self.center_message = f"¡{player.character} puede reciclar aquí!\nTiene {player.trash} de basura"
+        
+        # Si el jugador se de tuvo en esta casilla (moves_remaining == 0), mostrar mensaje y continuar
+        if self.moves_remaining <= 0:
+            self.waiting_for_enter = True
+            self.bottom_message = "Presiona ENTER para continuar"
+            self.game_state = "RECYCLING_POINT_PASS"
+        else:
+            # Si está pasando por la casilla, mostrar mensaje temporal
+            self.show_temporary_recycling_message(self.center_message.replace('\n', ' '))
 
+    # Modificación 2: Agregar método para mostrar mensajes temporales de puntos de reciclaje
     def show_temporary_recycling_message(self, message):
         if self.moves_remaining > 0:
             self.bottom_message = f"{message} | Pasos restantes: {self.moves_remaining}"
         else:
             self.bottom_message = message
+
 
     def move_current_player(self):
         if self.moves_remaining <= 0:
@@ -591,11 +620,23 @@ class BoardGameView(State):
             self.center_message = (
                 f"Selecciona el camino:\nPasos restantes: {self.moves_remaining}")
 
+            # Corregir las direcciones de las bifurcaciones
+            current_pos = current_player_obj.position.id
+            if current_pos == 23:
+                # Casilla 23: ← para casilla 27, → para casilla 24
+                self.bottom_message = "← - Casilla 27 | → - Casilla 24"
+            elif current_pos == 32:
+                # Casilla 32: ← para casilla 34, → para casilla 33
+                self.bottom_message = "← - Casilla 34 | → - Casilla 33"
+            elif current_pos == 48:
+                # Casilla 48: ← para casilla 53, → para casilla 49
+                self.bottom_message = "← - Casilla 53 | → - Casilla 49"
+            else:
+                self.bottom_message = "← - Camino izquierdo | → - Camino derecho"
+
             if self.is_bot_mode and self.current_player == 2:
                 self.bottom_message = f"{self.player2_name} está decidiendo..."
                 self.schedule_bot_action("bot_make_choice", random.randint(800, 1500))
-            else:
-                self.bottom_message = "← - Camino izquierdo | → - Camino derecho"
 
             self.waiting_for_enter = False
             self.game_state = "CHOICE"
@@ -614,29 +655,55 @@ class BoardGameView(State):
         if choice_index < len(self.choice_options):
             current_player_obj = (
                 self.player1 if self.current_player == 1 else self.player2)
+        
+        # Corregir la lógica de elección para las bifurcaciones específicas
+        current_pos = current_player_obj.position.id
+        if current_pos == 23:
+            # Casilla 23: choice_index 0 (←) = casilla 27, choice_index 1 (→) = casilla 24
+            if choice_index == 0:
+                chosen_square = self.squares[27]  # Camino izquierdo
+            else:
+                chosen_square = self.squares[24]  # Camino derecho
+        elif current_pos == 32:
+            # Casilla 32: choice_index 0 (←) = casilla 34, choice_index 1 (→) = casilla 33
+            if choice_index == 0:
+                chosen_square = self.squares[34]  # Camino izquierdo
+            else:
+                chosen_square = self.squares[33]  # Camino derecho
+        elif current_pos == 48:
+            # Casilla 48: choice_index 0 (←) = casilla 53, choice_index 1 (→) = casilla 49
+            if choice_index == 0:
+                chosen_square = self.squares[53]  # Camino izquierdo
+            else:
+                chosen_square = self.squares[49]  # Camino derecho
+        else:
+            # Para otras bifurcaciones, usar la lógica original
             chosen_square = current_player_obj.position.next_squares[choice_index]
 
-            current_player_obj.move_to(chosen_square)
+        current_player_obj.move_to(chosen_square)
 
-            player_data = (
-                self.player1_data if self.current_player == 1 else self.player2_data)
-            player_data["pos_idx"] = chosen_square.id
-            player_data["pos_actual"] = list(self.casillas[chosen_square.id])
+        player_data = (
+            self.player1_data if self.current_player == 1 else self.player2_data)
+        player_data["pos_idx"] = chosen_square.id
+        player_data["pos_actual"] = list(self.casillas[chosen_square.id])
 
-            if chosen_square.recycle:
-                self.process_recycling_point_on_pass(current_player_obj, chosen_square)
+        if chosen_square.recycle:
+            self.process_recycling_point_on_pass(current_player_obj, chosen_square)
+            return
 
-            self.moves_remaining -= 1
-            self.game_state = "MOVING"
+        self.moves_remaining -= 1
+        self.game_state = "MOVING"
 
-            self.center_message = ""
+        self.center_message = ""
 
-            if self.moves_remaining <= 0:
-                self.apply_square_effect(current_player_obj)
+        if self.moves_remaining <= 0:
+            self.apply_square_effect(current_player_obj)
+        else:
+            # Continuar movimiento inmediatamente
+            if self.is_bot_mode and self.current_player == 2:
+                self.schedule_bot_action("move_current_player", random.randint(300, 600))
             else:
-                self.bottom_message = (
-                    f"Pasos restantes: {self.moves_remaining} - ENTER para continuar")
-                self.message_timer = pygame.time.get_ticks()
+                pygame.time.set_timer(pygame.USEREVENT + 1, 400)
 
     def bot_make_choice(self):
         if self.game_state != "CHOICE" or self.current_player != 2:
@@ -658,7 +725,17 @@ class BoardGameView(State):
 
             action = self.agent.get_action(state, possible_actions)
 
-            next_square_id = current_player_obj.position.next_squares[action].id
+            # Obtener el ID de la casilla de destino según la lógica corregida
+            current_pos = current_player_obj.position.id
+            if current_pos == 23:
+                next_square_id = 27 if action == 0 else 24
+            elif current_pos == 32:
+                next_square_id = 34 if action == 0 else 33
+            elif current_pos == 48:
+                next_square_id = 53 if action == 0 else 49
+            else:
+                next_square_id = current_player_obj.position.next_squares[action].id
+                
             self.bottom_message = (
                 f"{self.player2_name} elige el camino hacia la casilla {next_square_id}")
             self.make_choice(action)
@@ -668,6 +745,11 @@ class BoardGameView(State):
 
     def apply_square_effect(self, player):
         square = player.position
+
+        # Primero verificar si es un punto de reciclaje
+        if square.recycle:
+            self.process_recycling_point_on_pass(player, square)
+            return
 
         old_trash = player.trash
         square.effect(player, silent_mode=True)
@@ -695,23 +777,22 @@ class BoardGameView(State):
                 "continue_after_message", random.randint(1000, 2000))
 
     def end_turn(self):
-
         if self.turns_played_this_round >= 2:
-            points_to_reactivate = []
-            for point in self.recycling_points:
-                if point.timeout > 0:
-                    point.timeout -= 1
-                    if point.timeout == 0:
-                        points_to_reactivate.append(point.id)
-
-            self.points_to_reactivate = points_to_reactivate
-
-            self.current_round += 1
-
-            if self.current_round > self.rounds:
-                self.end_game()
-            else:
+            # Primero el minijuego, luego cambiar de ronda
+            if self.current_round < self.rounds:  # Solo si no es la última ronda
                 self.start_minigame()
+            else:
+                # Si es la última ronda, actualizar puntos y terminar juego
+                points_to_reactivate = []
+                for point in self.recycling_points:
+                    if point.timeout > 0:
+                        point.timeout -= 1
+                        if point.timeout == 0:
+                            points_to_reactivate.append(point.id)
+
+                self.points_to_reactivate = points_to_reactivate
+                self.current_round += 1
+                self.end_game()
         else:
             self.current_player = 2 if self.current_player == 1 else 1
             self.start_turn()
@@ -734,6 +815,12 @@ class BoardGameView(State):
         self.message_timer = pygame.time.get_ticks()
         self.game_state = "MINIGAME"
 
+    def start_minigame_countdown(self):
+        self.minigame_countdown = 3
+        self.minigame_countdown_timer = pygame.time.get_ticks()
+        self.game_state = "MINIGAME_COUNTDOWN"
+        self.waiting_for_enter = False
+
     def launch_minigame(self):
         if self.selected_minigame == "to_the_bin":
             from minigames.to_the_bin import ALaCanecaState
@@ -753,7 +840,6 @@ class BoardGameView(State):
         self.dice_total_message = ""
 
     def continue_after_minigame(self, player1_score, player2_score):
-
         if player1_score > player2_score:
             self.player1.collect_trash(10)
             self.player2.collect_trash(3)
@@ -786,7 +872,7 @@ class BoardGameView(State):
                 first_place = f"{self.player1_name} (Empate)"
                 second_place = f"{self.player2_name} (Empate)"
 
-        summary_lines = [f"¡Fin de la ronda {self.current_round - 1}!", ""]
+        summary_lines = [f"¡Fin de la ronda {self.current_round}!", ""]
 
         p1_changes = []
         if p1_badges_change != 0:
@@ -820,19 +906,56 @@ class BoardGameView(State):
         self.game_state = "ROUND_SUMMARY"
         self.message_timer = pygame.time.get_ticks()
 
+    # Modificación 3: Modificar el método start_new_round_after_summary para mostrar mensajes de puntos de reciclaje
+    def start_new_round_after_summary(self):
+        # Actualizar puntos de reciclaje y cambiar de ronda
+        points_to_reactivate = []
+        for point in self.recycling_points:
+            if point.timeout > 0:
+                point.timeout -= 1
+                if point.timeout == 0:
+                    points_to_reactivate.append(point.id)
+
+        self.points_to_reactivate = points_to_reactivate
+        self.current_round += 1
+
+        if self.current_round > self.rounds:
+            self.end_game()
+            return
+
+        # Verificar puntos de reciclaje activados
+        active_points = [point for point in self.recycling_points if point.timeout == 0]
+        inactive_points = [point for point in self.recycling_points if point.timeout > 0]
+
+        if hasattr(self, "points_to_reactivate") and self.points_to_reactivate:
+            points_count = len(self.points_to_reactivate)
+            self.center_message = f"📍 {points_count} punto{'s' if points_count > 1 else ''} de reciclaje reactivado{'s' if points_count > 1 else ''}"
+            self.points_to_reactivate = []
+        elif active_points:
+            active_count = len(active_points)
+            message = f"📍 {active_count} punto{'s' if active_count > 1 else ''} de reciclaje activo{'s' if active_count > 1 else ''}"
+            if inactive_points:
+                inactive_count = len(inactive_points)
+                message += f"\n🔒 {inactive_count} punto{'s' if inactive_count > 1 else ''} desactivado{'s' if inactive_count > 1 else ''}"
+            self.center_message = message
+        else:
+            self.center_message = "🔒 Todos los puntos de reciclaje están desactivados"
+
+        self.bottom_message = "Presiona ENTER para continuar"
+        self.waiting_for_enter = True
+        self.dice_total_message = ""
+        self.game_state = "RECYCLING_STATUS"
+        self.message_timer = pygame.time.get_ticks()
+
+
+    # Modificación 4: Modificar el método start_new_round para mostrar el número de ronda y luego los mensajes de puntos de reciclaje
     def start_new_round(self):
         self.start_new_round_tracking()
 
         self.current_player = self.round_starting_player
-        current_player_obj = self.player1 if self.current_player == 1 else self.player2
 
-        if hasattr(self, "points_to_reactivate") and self.points_to_reactivate:
-            points_msg = ", ".join([f"Punto {pid}" for pid in self.points_to_reactivate])
-            self.center_message = f"¡Ronda {self.current_round}!\n\n📍 Puntos de Reciclaje reactivados:\n{points_msg}\n\nAhora están disponibles para ser usados\n\n🎯 Empieza: {current_player_obj.character}"
-            self.points_to_reactivate = []
-        else:
-            self.center_message = f"¡Ronda {self.current_round}!\n\n🎯 Empieza: {current_player_obj.character}"
-
+        # Solo mostrar el número de ronda
+        self.center_message = f"Ronda {self.current_round}"
         self.bottom_message = "Presiona ENTER para continuar"
         self.waiting_for_enter = True
         self.dice_total_message = ""
@@ -950,8 +1073,10 @@ class BoardGameView(State):
                             self.center_message = ""
                             self.waiting_for_enter = False
                     elif self.game_state == "MINIGAME":
-                        self.launch_minigame()
+                        self.start_minigame_countdown()
                     elif self.game_state == "ROUND_SUMMARY":
+                        self.start_new_round_after_summary()
+                    elif self.game_state == "RECYCLING_STATUS":
                         self.start_new_round()
                     elif self.game_state == "NEW_ROUND":
                         self.start_turn()
@@ -979,6 +1104,32 @@ class BoardGameView(State):
 
             elif self.game_state == "MOVING":
                 self.move_current_player()
+            
+            elif self.game_state == "RECYCLING_POINT_PASS":
+                if self.moves_remaining <= 0:
+                    # Si se detuvo en la casilla, aplicar efecto de la casilla después
+                    current_player_obj = self.player1 if self.current_player == 1 else self.player2
+                    square = current_player_obj.position
+                    
+                    # Aplicar efecto de la casilla (normalmente azul/neutral)
+                    old_trash = current_player_obj.trash
+                    square.effect(current_player_obj, silent_mode=True)
+                    new_trash = current_player_obj.trash
+
+                    if square.type == "blue":
+                        self.center_message = f"¡{current_player_obj.character} cayó en una casilla azul!\n\nCasilla neutral, no pasa nada especial."
+                    elif square.type == "green":
+                        trash_gained = new_trash - old_trash
+                        self.center_message = f"¡{current_player_obj.character} cayó en una casilla verde!\n\nGana {trash_gained} de basura"
+                    elif square.type == "red":
+                        trash_lost = old_trash - new_trash
+                        self.center_message = f"¡Oh no! {current_player_obj.character} cayó en una casilla roja!\n\nPierde {trash_lost} de basura"
+                    
+                    self.game_state = "SQUARE_EFFECT"
+                else:
+                    self.game_state = "MOVING"
+                    self.center_message = ""
+                    self.waiting_for_enter = False
 
     def _start_transition(self, callback):
         self.transitioning = True
@@ -995,6 +1146,16 @@ class BoardGameView(State):
         self.update_dice_animation(dt)
 
         self.update_player_movement(dt)
+
+        # Manejar conteo de minijuego
+        if self.game_state == "MINIGAME_COUNTDOWN":
+            current_time = pygame.time.get_ticks()
+            if current_time - self.minigame_countdown_timer >= 1000:
+                self.minigame_countdown -= 1
+                self.minigame_countdown_timer = current_time
+                
+                if self.minigame_countdown <= 0:
+                    self.launch_minigame()
 
         if (
             self.bot_thinking
@@ -1025,6 +1186,7 @@ class BoardGameView(State):
             if pygame.time.get_ticks() - self.message_timer > 1000:
                 self.start_dice_roll()
 
+    # Modificación 5: Eliminar el conteo 3-2-1 del tablero mapa
     def render(self, screen):
         if self.bg_image:
             screen.blit(self.bg_image, (0, 0))
@@ -1079,6 +1241,9 @@ class BoardGameView(State):
                 and self.game_state in ["DICE_ROLL", "DICE_SHOWING_RESULT"]))
         has_dice_total = bool(self.dice_total_message)
 
+        # Eliminar el conteo de minijuego del tablero mapa
+        # Solo mostrar conteo en los minijuegos, no en el tablero principal
+
         total_height = 0
         if has_center_message:
             lines = self.center_message.split("\n")
@@ -1106,7 +1271,7 @@ class BoardGameView(State):
                     max_width = max(max_width, text_surface.get_width())
 
             if rendered_lines:
-                box_width = max_width + 40
+                box_width = min(max_width + 40, SCREEN_WIDTH - 40)  # Limitar ancho máximo
                 box_height = len(rendered_lines) * line_height + 20
                 box_x = (SCREEN_WIDTH - box_width) // 2
 
@@ -1143,8 +1308,14 @@ class BoardGameView(State):
                         (dice_pos[0] - p1_label.get_width() // 2, dice_pos[1] + 90),)
 
                 elif self.initial_dice_phase >= 2:
-                    dice1_pos = (SCREEN_WIDTH // 2 - 100, dice_y)
-                    dice2_pos = (SCREEN_WIDTH // 2 + 100, dice_y)
+                    # Centrar correctamente los dados iniciales en el eje X
+                    dice_width = 80
+                    dice_spacing = 40  # Espacio entre dados
+                    total_width = dice_width * 2 + dice_spacing
+                    start_x = (SCREEN_WIDTH - total_width) // 2
+                    
+                    dice1_pos = (start_x, dice_y)
+                    dice2_pos = (start_x + dice_width + dice_spacing, dice_y)
 
                     dice1_img = self.dice_images[self.initial_dice1_value - 1]
                     if self.initial_dice2_rolling:
@@ -1161,12 +1332,12 @@ class BoardGameView(State):
                     screen.blit(
                         p1_label,
                         (
-                            dice1_pos[0] + 40 - p1_label.get_width() // 2,
+                            dice1_pos[0] + dice_width // 2 - p1_label.get_width() // 2,
                             dice1_pos[1] + 90,),)
                     screen.blit(
                         p2_label,
                         (
-                            dice2_pos[0] + 40 - p2_label.get_width() // 2,
+                            dice2_pos[0] + dice_width // 2 - p2_label.get_width() // 2,
                             dice2_pos[1] + 90,),)
 
             elif (
@@ -1181,11 +1352,15 @@ class BoardGameView(State):
                     dice_img, (dice_pos[0] - dice_img.get_width() // 2, dice_pos[1]))
 
             else:
-                dice_spacing = 120
-                dice1_x = SCREEN_WIDTH // 2 - dice_spacing // 2
-                dice2_x = SCREEN_WIDTH // 2 + dice_spacing // 2
-                dice1_pos = (dice1_x - 40, dice_y)
-                dice2_pos = (dice2_x - 40, dice_y)
+                # Centrar perfectamente los dados y el símbolo '+'
+                dice_width = 80
+                plus_width = 30  # Aumentar el espacio para el símbolo +
+                total_width = dice_width * 2 + plus_width
+                start_x = (SCREEN_WIDTH - total_width) // 2
+                
+                dice1_pos = (start_x, dice_y)
+                plus_x = start_x + dice_width + (plus_width // 2)
+                dice2_pos = (start_x + dice_width + plus_width, dice_y)
 
                 if self.dice1_rolling:
                     dice1_img = self.dice_images[self.current_dice1_frame]
@@ -1207,8 +1382,7 @@ class BoardGameView(State):
                 if self.dice1_value is not None or self.dice1_rolling:
                     plus_font = load_font("assets/fonts/PublicPixel.ttf", 36)
                     plus_text = plus_font.render("+", True, WHITE)
-                    plus_rect = plus_text.get_rect(
-                        center=(SCREEN_WIDTH // 2, dice_y + 40))
+                    plus_rect = plus_text.get_rect(center=(plus_x, dice_y + 40))
                     screen.blit(plus_text, plus_rect)
 
                 if dice2_img:
@@ -1258,6 +1432,7 @@ class BoardGameView(State):
 
         self.transition.render(screen)
 
+
     def draw_game_info(self, screen):
         if self.turn_message:
             turn_text = self.font_turn.render(self.turn_message, True, WHITE)
@@ -1274,8 +1449,10 @@ class BoardGameView(State):
             screen.blit(bg_surface, bg_rect)
             screen.blit(turn_text, turn_rect)
 
+        # Corregir el indicador de ronda para que no muestre ronda 11/10
+        display_round = min(self.current_round, self.rounds)
         round_text = self.font_title.render(
-            f"RONDA {self.current_round}/{self.rounds}", True, WHITE)
+            f"RONDA {display_round}/{self.rounds}", True, WHITE)
         round_rect = round_text.get_rect(topright=(SCREEN_WIDTH - 20, 20))
 
         bg_rect = pygame.Rect(

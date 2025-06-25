@@ -1,4 +1,4 @@
-# Script de animación de dados
+# Animación de dados
 
 import pygame
 import random

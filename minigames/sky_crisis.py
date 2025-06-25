@@ -22,6 +22,7 @@ class CieloEnCrisisState(State):
 
         self.font = load_font("assets/fonts/PublicPixel.ttf", 22)
         self.font_small = load_font("assets/fonts/PublicPixel.ttf", 16)
+        self.font_final = load_font("assets/fonts/PublicPixel.ttf", 32)
 
         character_names = ["Rosalba", "Tinú", "Sofia", "Luis"]
         self.player1_name = character_names[config.characters[0]]
@@ -91,13 +92,13 @@ class CieloEnCrisisState(State):
         self.tiempo_juego = 30
         self.inicio_tiempo = pygame.time.get_ticks()
 
-        self.game_state = "PLAYING"
+        # Estados del minijuego
+        self.game_state = "RULES"
+        self.countdown = 3
+        self.countdown_timer = 0
 
         self.random_j1 = random.Random()
         self.random_j2 = random.Random()
-
-        pygame.time.set_timer(pygame.USEREVENT + 1, 600)
-        pygame.time.set_timer(pygame.USEREVENT + 2, 600)
 
     def handle_event(self, event):
         if not self.can_handle_input or self.transitioning or self.transition.active:
@@ -107,21 +108,25 @@ class CieloEnCrisisState(State):
             if event.key == pygame.K_ESCAPE:
                 self._start_transition(lambda: self.game.state_stack.pop())
 
+            elif self.game_state == "RULES" and event.key == pygame.K_RETURN:
+                self.game_state = "COUNTDOWN"
+                self.countdown_timer = pygame.time.get_ticks()
             elif self.game_state == "GAME_OVER":
                 if event.key == pygame.K_RETURN:
                     self._end_minigame()
 
-        if event.type == pygame.USEREVENT + 1:
-            tipo1 = self.random_j1.choice(self.tipos_basura)
-            x1 = self.random_j1.randint(0, SCREEN_WIDTH // 2 - 40)
-            self.basura_jugador1.append(
-                {"rect": pygame.Rect(x1, -40, 40, 40), "tipo": tipo1})
+        if self.game_state == "PLAYING":
+            if event.type == pygame.USEREVENT + 1:
+                tipo1 = self.random_j1.choice(self.tipos_basura)
+                x1 = self.random_j1.randint(0, SCREEN_WIDTH // 2 - 40)
+                self.basura_jugador1.append(
+                    {"rect": pygame.Rect(x1, -40, 40, 40), "tipo": tipo1})
 
-        if event.type == pygame.USEREVENT + 2:
-            tipo2 = self.random_j2.choice(self.tipos_basura)
-            x2 = self.random_j2.randint(SCREEN_WIDTH // 2, SCREEN_WIDTH - 40)
-            self.basura_jugador2.append(
-                {"rect": pygame.Rect(x2, -40, 40, 40), "tipo": tipo2})
+            if event.type == pygame.USEREVENT + 2:
+                tipo2 = self.random_j2.choice(self.tipos_basura)
+                x2 = self.random_j2.randint(SCREEN_WIDTH // 2, SCREEN_WIDTH - 40)
+                self.basura_jugador2.append(
+                    {"rect": pygame.Rect(x2, -40, 40, 40), "tipo": tipo2})
 
     def _start_transition(self, callback):
         self.transitioning = True
@@ -146,7 +151,19 @@ class CieloEnCrisisState(State):
             self.transitioning = False
             self.can_handle_input = True
 
-        if self.game_state == "PLAYING":
+        if self.game_state == "COUNTDOWN":
+            current_time = pygame.time.get_ticks()
+            if current_time - self.countdown_timer >= 1000:
+                self.countdown -= 1
+                self.countdown_timer = current_time
+                
+                if self.countdown <= 0:
+                    self.game_state = "PLAYING"
+                    self.inicio_tiempo = pygame.time.get_ticks()
+                    pygame.time.set_timer(pygame.USEREVENT + 1, 600)
+                    pygame.time.set_timer(pygame.USEREVENT + 2, 600)
+
+        elif self.game_state == "PLAYING":
             tiempo_actual = (pygame.time.get_ticks() - self.inicio_tiempo) / 1000
             tiempo_restante = max(0, self.tiempo_juego - tiempo_actual)
 
@@ -210,14 +227,70 @@ class CieloEnCrisisState(State):
     def render(self, screen):
         screen.blit(self.fondo, (0, 0))
 
+        if self.game_state == "RULES":
+            # Fondo oscuro para mejor legibilidad de las instrucciones
+            bg_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 240))  # Fondo más oscuro
+            screen.blit(bg_surface, (0, 0))
+            
+            # Mostrar reglas del minijuego
+            rules_text = [
+                "Cielo En Crisis",
+                "",
+                "Recoge la basura que cae del cielo:",
+                "• Muévete para atrapar toda la basura posible",
+                "• Cada pieza de basura vale 1 punto",
+                "• La velocidad aumenta con el tiempo",
+                "",
+                f"Controles:",
+                f"{self.player1_name}: A, D",
+                f"{self.player2_name}: ←, →",
+                "",
+                "Tienes 30 segundos para recoger la mayor cantidad.",
+                "",
+                "Presiona ENTER para comenzar"
+            ]
+            
+            y_offset = 50
+            for line in rules_text:
+                if line:
+                    text_surface = self.font_small.render(line, True, WHITE)
+                    text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+                    screen.blit(text_surface, text_rect)
+                y_offset += 30
+            return
+
+        elif self.game_state == "COUNTDOWN":
+            # Mostrar conteo
+            countdown_text = str(self.countdown) if self.countdown > 0 else "¡EMPEZAR!"
+            countdown_surface = self.font_final.render(countdown_text, True, WHITE)
+            countdown_rect = countdown_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+            
+            # Fondo para el conteo
+            bg_rect = pygame.Rect(
+                countdown_rect.x - 50,
+                countdown_rect.y - 30,
+                countdown_rect.width + 100,
+                countdown_rect.height + 60
+            )
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 200))
+            screen.blit(bg_surface, bg_rect)
+            pygame.draw.rect(screen, WHITE, bg_rect, 3)
+            
+            screen.blit(countdown_surface, countdown_rect)
+            return
+
+        # Resto del juego (cuando está jugando o terminado)
         pygame.draw.line(
             screen, BLACK, (SCREEN_WIDTH // 2, 0), (SCREEN_WIDTH // 2, SCREEN_HEIGHT), 2)
 
-        for b in self.basura_jugador1:
-            screen.blit(b["tipo"]["superficie"], b["rect"])
+        if self.game_state == "PLAYING":
+            for b in self.basura_jugador1:
+                screen.blit(b["tipo"]["superficie"], b["rect"])
 
-        for b in self.basura_jugador2:
-            screen.blit(b["tipo"]["superficie"], b["rect"])
+            for b in self.basura_jugador2:
+                screen.blit(b["tipo"]["superficie"], b["rect"])
 
         screen.blit(self.caneca_img, self.jugador1_pos)
         screen.blit(self.caneca_img, self.jugador2_pos)
@@ -228,8 +301,11 @@ class CieloEnCrisisState(State):
         texto2 = self.font.render(f"{self.player2_name}: {self.puntaje2}", True, WHITE)
         screen.blit(texto2, (SCREEN_WIDTH - texto2.get_width() - 20, 10))
 
-        tiempo_actual = (pygame.time.get_ticks() - self.inicio_tiempo) / 1000
-        tiempo_restante = max(0, self.tiempo_juego - tiempo_actual)
+        if self.game_state == "PLAYING":
+            tiempo_actual = (pygame.time.get_ticks() - self.inicio_tiempo) / 1000
+            tiempo_restante = max(0, self.tiempo_juego - tiempo_actual)
+        else:
+            tiempo_restante = 0
 
         tiempo_rect = pygame.Rect(SCREEN_WIDTH // 2 - 40, 10, 80, 40)
         pygame.draw.rect(screen, BLACK, tiempo_rect)

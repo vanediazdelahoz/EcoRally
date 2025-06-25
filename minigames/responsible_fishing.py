@@ -21,6 +21,7 @@ class PescaResponsableState(State):
 
         self.font = load_font("assets/fonts/PublicPixel.ttf", 22)
         self.font_small = load_font("assets/fonts/PublicPixel.ttf", 16)
+        self.font_final = load_font("assets/fonts/PublicPixel.ttf", 32)
 
         character_names = ["Rosalba", "Tinú", "Sofia", "Luis"]
         self.player1_name = character_names[config.characters[0]]
@@ -70,7 +71,12 @@ class PescaResponsableState(State):
         self.load_images()
         self.trash_list = []
         self.start_ticks = pygame.time.get_ticks()
-        self.game_state = "PLAYING"
+        
+        # Estados del minijuego
+        self.game_state = "RULES"
+        self.countdown = 3
+        self.countdown_timer = 0
+        
         self.trash_spawn_counter = 0
         self.trash_spawn_frequency = (1)
 
@@ -138,6 +144,7 @@ class PescaResponsableState(State):
     def spawn_trash(self):
         direction = random.choice(["left", "right"])
         y = random.randint(self.TOP_MARGIN, self.TRASH_LIMIT_BOTTOM - self.TRASH_SIZE)
+        y = random.randint(self.TOP_MARGIN, self.TRASH_LIMIT_BOTTOM - self.TRASH_SIZE)
         image = random.choice(self.ALL_TRASH_IMAGES)
 
         if direction == "right":
@@ -187,6 +194,9 @@ class PescaResponsableState(State):
             if event.key == pygame.K_ESCAPE:
                 self._start_transition(lambda: self.game.state_stack.pop())
 
+            elif self.game_state == "RULES" and event.key == pygame.K_RETURN:
+                self.game_state = "COUNTDOWN"
+                self.countdown_timer = pygame.time.get_ticks()
             elif self.game_state == "GAME_OVER":
                 if event.key == pygame.K_RETURN:
                     self._end_minigame()
@@ -239,7 +249,17 @@ class PescaResponsableState(State):
             self.transitioning = False
             self.can_handle_input = True
 
-        if self.game_state == "PLAYING":
+        if self.game_state == "COUNTDOWN":
+            current_time = pygame.time.get_ticks()
+            if current_time - self.countdown_timer >= 1000:
+                self.countdown -= 1
+                self.countdown_timer = current_time
+                
+                if self.countdown <= 0:
+                    self.game_state = "PLAYING"
+                    self.start_ticks = pygame.time.get_ticks()
+
+        elif self.game_state == "PLAYING":
             elapsed_time = (pygame.time.get_ticks() - self.start_ticks) / 1000
             time_left = self.ROUND_TIME - elapsed_time
 
@@ -275,14 +295,70 @@ class PescaResponsableState(State):
     def render(self, screen):
         screen.blit(self.background_img, (0, 0))
 
+        if self.game_state == "RULES":
+            # Fondo oscuro para mejor legibilidad de las instrucciones
+            bg_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 240))  # Fondo más oscuro
+            screen.blit(bg_surface, (0, 0))
+            
+            # Mostrar reglas del minijuego
+            rules_text = [
+                "Pesca Responsable",
+                "",
+                "Pesca responsable en el océano:",
+                "• Muévete para recoger la basura flotante",
+                "• Cada pieza de basura vale 1 punto",
+                "• Limpia el océano de contaminación",
+                "",
+                f"Controles:",
+                f"{self.player1_name}: W, A, S, D",
+                f"{self.player2_name}: ↑, ←, ↓, →",
+                "",
+                "Tienes 30 segundos para limpiar el océano.",
+                "",
+                "Presiona ENTER para comenzar"
+            ]
+            
+            y_offset = 50
+            for line in rules_text:
+                if line:
+                    text_surface = self.font_small.render(line, True, WHITE)
+                    text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+                    screen.blit(text_surface, text_rect)
+                y_offset += 30
+            return
+
+        elif self.game_state == "COUNTDOWN":
+            # Mostrar conteo
+            countdown_text = str(self.countdown) if self.countdown > 0 else "¡EMPEZAR!"
+            countdown_surface = self.font_final.render(countdown_text, True, WHITE)
+            countdown_rect = countdown_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+            
+            # Fondo para el conteo
+            bg_rect = pygame.Rect(
+                countdown_rect.x - 50,
+                countdown_rect.y - 30,
+                countdown_rect.width + 100,
+                countdown_rect.height + 60
+            )
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 200))
+            screen.blit(bg_surface, bg_rect)
+            pygame.draw.rect(screen, WHITE, bg_rect, 3)
+            
+            screen.blit(countdown_surface, countdown_rect)
+            return
+
+        # Resto del juego (cuando está jugando o terminado)
         screen.blit(self.BARCO1_IMAGE, self.BARCO1_POS)
         screen.blit(self.BARCO2_IMAGE, self.BARCO2_POS)
 
         for player in self.players:
             screen.blit(player["image"], player["rect"])
 
-        for trash in self.trash_list:
-            screen.blit(trash["image"], trash["rect"])
+        if self.game_state == "PLAYING":
+            for trash in self.trash_list:
+                screen.blit(trash["image"], trash["rect"])
 
         texto1 = self.font.render(
             f"{self.player1_name}: {self.players[0]['score']}", True, WHITE)
@@ -293,8 +369,11 @@ class PescaResponsableState(State):
         texto2_rect = texto2.get_rect(topright=(SCREEN_WIDTH - 20, 10))
         screen.blit(texto2, texto2_rect)
 
-        elapsed_time = (pygame.time.get_ticks() - self.start_ticks) / 1000
-        time_left = max(0, self.ROUND_TIME - elapsed_time)
+        if self.game_state == "PLAYING":
+            elapsed_time = (pygame.time.get_ticks() - self.start_ticks) / 1000
+            time_left = max(0, self.ROUND_TIME - elapsed_time)
+        else:
+            time_left = 0
 
         tiempo_rect = pygame.Rect(SCREEN_WIDTH // 2 - 40, 10, 80, 40)
         pygame.draw.rect(screen, BLACK, tiempo_rect)

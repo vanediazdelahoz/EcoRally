@@ -121,7 +121,10 @@ class ALaCanecaState(State):
         self.basura_j1 = random.choice(self.nombres)
         self.basura_j2 = random.choice(self.nombres)
 
-        self.game_state = "PLAYING"
+        # Estados del minijuego
+        self.game_state = "RULES"
+        self.countdown = 3
+        self.countdown_timer = 0
 
     def nueva_basura(self, jugador):
         if jugador == 1:
@@ -150,7 +153,11 @@ class ALaCanecaState(State):
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self._start_transition(lambda: self.game.state_stack.pop())
-            if self.game_state == "PLAYING":
+            
+            if self.game_state == "RULES" and event.key == pygame.K_RETURN:
+                self.game_state = "COUNTDOWN"
+                self.countdown_timer = pygame.time.get_ticks()
+            elif self.game_state == "PLAYING":
                 correcta_j1 = self.clasificacion[self.basura_j1]
                 if event.key == pygame.K_w:
                     self.puntaje1 += 1 if correcta_j1 == "blanca" else -1
@@ -201,7 +208,17 @@ class ALaCanecaState(State):
             self.transitioning = False
             self.can_handle_input = True
 
-        if self.game_state == "PLAYING":
+        if self.game_state == "COUNTDOWN":
+            current_time = pygame.time.get_ticks()
+            if current_time - self.countdown_timer >= 1000:
+                self.countdown -= 1
+                self.countdown_timer = current_time
+                
+                if self.countdown <= 0:
+                    self.game_state = "PLAYING"
+                    self.inicio = pygame.time.get_ticks()
+
+        elif self.game_state == "PLAYING":
             tiempo_actual = (pygame.time.get_ticks() - self.inicio) / 1000
             tiempo_restante = max(0, self.tiempo_limite - tiempo_actual)
 
@@ -219,6 +236,61 @@ class ALaCanecaState(State):
     def render(self, screen):
         screen.blit(self.fondo, (0, 0))
 
+        if self.game_state == "RULES":
+            # Fondo oscuro para mejor legibilidad de las instrucciones
+            bg_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 240))  # Fondo más oscuro
+            screen.blit(bg_surface, (0, 0))
+            
+            # Mostrar reglas del minijuego
+            rules_text = [
+                "A La Caneca",
+                "",
+                "Clasifica la basura en las canecas correctas:",
+                f"• Blanca (W/↑): Reciclables (botellas, latas, papel)",
+                f"• Negra (A/←): No reciclables (aluminio)",
+                f"• Verde (D/→): Orgánicos (frutas, comida)",
+                "",
+                f"Controles:",
+                f"{self.player1_name}: W, A, D",
+                f"{self.player2_name}: ↑, ←, →",
+                "",
+                "Tienes 30 segundos para clasificar correctamente.",
+                "",
+                "Presiona ENTER para comenzar"
+            ]
+            
+            y_offset = 50
+            for line in rules_text:
+                if line:
+                    text_surface = self.font_small.render(line, True, WHITE)
+                    text_rect = text_surface.get_rect(center=(SCREEN_WIDTH // 2, y_offset))
+                    screen.blit(text_surface, text_rect)
+                y_offset += 30
+            return
+
+        elif self.game_state == "COUNTDOWN":
+            # Mostrar conteo
+            countdown_text = str(self.countdown) if self.countdown > 0 else "¡EMPEZAR!"
+            countdown_surface = self.font_final.render(countdown_text, True, WHITE)
+            countdown_rect = countdown_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+            
+            # Fondo para el conteo
+            bg_rect = pygame.Rect(
+                countdown_rect.x - 50,
+                countdown_rect.y - 30,
+                countdown_rect.width + 100,
+                countdown_rect.height + 60
+            )
+            bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 200))
+            screen.blit(bg_surface, bg_rect)
+            pygame.draw.rect(screen, WHITE, bg_rect, 3)
+            
+            screen.blit(countdown_surface, countdown_rect)
+            return
+
+        # Resto del juego (cuando está jugando o terminado)
         pygame.draw.rect(
             screen, (30, 30, 40), (SCREEN_WIDTH // 2 - 1, 0, 3, SCREEN_HEIGHT))
 
@@ -254,10 +326,10 @@ class ALaCanecaState(State):
                     "→", True, (255, 255, 255))
                 screen.blit(text_a, (pos[0] + 43, pos[1] + 50))
 
-        screen.blit(self.imagenes[self.basura_j1], (SCREEN_WIDTH // 4 - 40, 200))
-        screen.blit(self.imagenes[self.basura_j2], ((3 * SCREEN_WIDTH) // 4 - 40, 200))
-
         if self.game_state == "PLAYING":
+            screen.blit(self.imagenes[self.basura_j1], (SCREEN_WIDTH // 4 - 40, 200))
+            screen.blit(self.imagenes[self.basura_j2], ((3 * SCREEN_WIDTH) // 4 - 40, 200))
+
             tiempo_actual = (pygame.time.get_ticks() - self.inicio) / 1000
             tiempo_restante = max(0, self.tiempo_limite - tiempo_actual)
         else:
