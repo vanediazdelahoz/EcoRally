@@ -153,11 +153,11 @@ def create_board():
     s49.add_next_square(s50)
     s50.add_next_square(s51)
     s51.add_next_square(s52)
-    s52.add_next_square(s53)
-    s54.add_next_square(s55)
+    s52.add_next_square(s59)
     s59.add_next_square(s67)
     s48.add_next_square(s53)  # 53 empieza bifurcación izquierda de 48
     s53.add_next_square(s54)
+    s54.add_next_square(s55)
     s55.add_next_square(s56)
     s56.add_next_square(s57)
     s57.add_next_square(s58)

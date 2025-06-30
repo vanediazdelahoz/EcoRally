@@ -726,18 +726,9 @@ class BoardGameView(State):
 
     def end_turn(self):
         if self.turns_played_this_round >= 2:
-            if self.current_round < self.rounds:
+            if self.current_round <= self.rounds:
                 self.start_minigame()
             else:
-                points_to_reactivate = []
-                for point in self.recycling_points:
-                    if point.timeout > 0:
-                        point.timeout -= 1
-                        if point.timeout == 0:
-                            points_to_reactivate.append(point.id)
-
-                self.points_to_reactivate = points_to_reactivate
-                self.current_round += 1
                 self.end_game()
         else:
             self.current_player = 2 if self.current_player == 1 else 1
@@ -898,16 +889,16 @@ class BoardGameView(State):
         self.game_state = "GAME_OVER"
 
         if self.player1.badges > self.player2.badges:
-            winner = f"{self.player1_name} gana la partida con más insignias que su oponente."
+            winner = f"{self.player1_name} gana la partida con más insignias\nque su oponente."
         elif self.player2.badges > self.player1.badges:
-            winner = f"{self.player2_name} gana la partida con más insignias que su oponente."
+            winner = f"{self.player2_name} gana la partida con más insignias\nque su oponente."
         else:
             if self.player1.trash > self.player2.trash:
-                winner = f"¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {self.player1_name} gana la partida gracias a su mayor esfuerzo recolectando basura."
+                winner = f"¡Qué duelo tan parejo!\nAmbos tienen la misma cantidad de insignias,\npero {self.player1_name} gana la partida gracias\na su mayor esfuerzo recolectando basura."
             elif self.player2.trash > self.player1.trash:
-                winner = f"¡Qué duelo tan parejo!\nAmbos jugadores tienen la misma cantidad de insignias,\npero {self.player2_name} gana la partida gracias a su mayor esfuerzo recolectando basura."
+                winner = f"¡Qué duelo tan parejo!\nAmbos tienen la misma cantidad de insignias,\npero {self.player2_name} gana la partida gracias\na su mayor esfuerzo recolectando basura."
             else:
-                winner = "¡Es un empate total! Ambos jugadores tienen las mismas insignias y basura."
+                winner = "¡Es un empate total!\nAmbos jugadores tienen las mismas\ninsignias y basura."
 
         self.center_message = f"¡Fin del juego!\n\nResultados finales:\n{self.player1_name} - Insignias: {self.player1.badges} | Basura: {self.player1.trash}\n{self.player2_name} - Insignias: {self.player2.badges} | Basura: {self.player2.trash}\n\n{winner}"
         self.bottom_message = "Presiona ESC para salir"
@@ -1245,8 +1236,13 @@ class BoardGameView(State):
             screen.blit(bg_surface, bg_rect)
             screen.blit(turn_text, turn_rect)
 
-        display_round = min(self.current_round, self.rounds)
-        round_text = self.font_title.render(f"RONDA {display_round}/{self.rounds}", True, WHITE)
+        if self.game_state == "INITIAL_ROLL":
+            round_str = f"RONDA -/{self.rounds}"
+        else:
+            display_round = min(self.current_round, self.rounds)
+            round_str = f"RONDA {display_round}/{self.rounds}"
+            
+        round_text = self.font_title.render(round_str, True, WHITE)
         round_rect = round_text.get_rect(topright=(SCREEN_WIDTH - 20, 20))
         bg_rect = pygame.Rect(round_rect.x - 10, round_rect.y - 5, round_rect.width + 20, round_rect.height + 10)
         bg_surface = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
